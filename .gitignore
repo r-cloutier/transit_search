@@ -1,0 +1,8 @@
+#*
+*~
+*pyc
+*notes*
+/MAST
+/__pycache__
+/.ipynb_checkpoints
+/plots
