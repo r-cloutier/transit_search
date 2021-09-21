@@ -4,7 +4,8 @@ import pdb
 import constants as cs
 from tls_object import transit_search, loadpickle
 import get_tess_data as gtd
-import median_detrend as mdt 
+import median_detrend as mdt
+import define_tls_grid as dtg
 import transitleastsquares as tls
 
 
@@ -102,8 +103,12 @@ def run_tls_Nplanets(ts, Nplanets_max=3, pltt=True):
     p = tls.catalog_info(TIC_ID=ts.tic)
     ts.star.ab, ts.star.Ms, ts.star.Ms_min, ts.star.Ms_max, ts.star.Rs, ts.star.Rs_min, ts.star.Rs_max = p
 
+    # get maximum period for 2 transits on average
+    Pmax,_,_ = dtg.get_Ntransit_vs_period(ts.tic, ts.lc.bjd, ts.lc.sectors)
+    print('###', Pmax)
+    
     # run the tls iteratively (multiple signals) and on each sector
-    for s in np.unique(ts.lc.sectors):
+    for i,s in enumerate(np.unique(ts.lc.sectors)):
         
         g = ts.lc.sectors == s
         lc_input = ts.lc.bjd[g], ts.lc.fdetrend[g], ts.lc.efnorm[g]
@@ -113,7 +118,7 @@ def run_tls_Nplanets(ts, Nplanets_max=3, pltt=True):
             print('Running TLS for planet %i (sector %i)'%(n+1,s))
             
             # run tls on this sector
-            results = _run_tls(*lc_input, ts.star.ab)
+            results = _run_tls(*lc_input, ts.star.ab, period_max=Pmax[i])
             setattr(ts.tls, 'results_%i_s%.2d'%(n+1,s), results)
 
             # mask out found signal
@@ -132,16 +137,19 @@ def run_tls_Nplanets(ts, Nplanets_max=3, pltt=True):
                     plt.axvline(results.period/i, ls='--', alpha=.4)
                 plt.ylabel('SDE_raw', fontsize=12)
                 plt.xlabel('Period [days]', fontsize=12)
-                plt.xlim(0, np.max(results.periods))
+                plt.xlim(0, np.max(results.periods)*1.02)
                 plt.savefig('%s/plots/sde_tic%i_s%.2d_run%i'%(cs.repo_dir,ts.tic,s,n+1))
                 plt.close('all')
 
 
 
 
-def _run_tls(bjd, fdetrend, efnorm, ab):
+def _run_tls(bjd, fdetrend, efnorm, ab, period_max=0):
     model = tls.transitleastsquares(bjd, fdetrend, efnorm)
-    results = model.power(u=ab)
+    if period_max > 0: 
+        results = model.power(u=ab, period_max=period_max)
+    else:
+        results = model.power(u=ab)
     return results
 
 
