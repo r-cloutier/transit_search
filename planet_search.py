@@ -30,7 +30,7 @@ def read_in_lightcurve(tic, minsector=1, maxsector=56, use_20sec=False,
             plt.ylabel('Normalized flux', fontsize=12)
             plt.legend(fontsize=12)
             plt.savefig('%s/rawLC_%i.png')
-            plt.close('all')
+            plt.close('all') 
             
     return bjd, fnorm, efnorm, sectors, qual_flags, texps, Nsect
 
