@@ -29,8 +29,24 @@ def read_in_lightcurve(tic, minsector=1, maxsector=56, use_20sec=False,
             plt.xlabel('BJD - 2,457,000', fontsize=12)
             plt.ylabel('Normalized flux', fontsize=12)
             plt.legend(fontsize=12)
-            plt.savefig('%s/rawLC_%i.png')
-            plt.close('all') 
+            plt.savefig('%s/rawLC_TIC%i.png'%(plot_dir, tic))
+            plt.close('all')
             
     return bjd, fnorm, efnorm, sectors, qual_flags, texps, Nsect
+
+
+
+def detrend_lightcurve_median(*args, window_length_hrs=12):
+    assert len(args) == 5
+    bjd, fnorm, efnorm, sectors, qual_flags = args
+    
+    # detrend each sector individually and construct outlier mask
+    kwargs = {'window_length_days': window_length_hrs/24}
+    fdetrend, mask = mdt.detrend_all_sectors(bjd, fnorm, sectors, **kwargs)
+
+    # mask outliers
+    p = np.vstack([bjd,fnorm,fdetrend,efnorm,sectors,qual_flags]).T[mask].T
+
+    return p
+
 
