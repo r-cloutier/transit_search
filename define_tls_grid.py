@@ -44,7 +44,7 @@ def get_Ntransit_vs_period(tic, bjd, sectors, pltt=True):
         plt.xlabel('Maximum period [days]', fontsize=12)
         plt.legend(fontsize=12)
         plt.grid(color='k', lw=.2, ls='--')
-        plt.savefig('%s/plots/Ntransits_TIC%i.png'%(cs.repo_dir, tic))
+        plt.savefig('%s/MAST/TESS/TIC%i/Ntransits.png'%(cs.repo_dir, tic))
         plt.close('all')
 
     return Pmax_per_sector, Pmax, Ntransits_covered

@@ -105,7 +105,6 @@ def run_tls_Nplanets(ts, Nplanets_max=3, pltt=True):
 
     # get maximum period for 2 transits on average
     Pmax,_,_ = dtg.get_Ntransit_vs_period(ts.tic, ts.lc.bjd, ts.lc.sectors)
-    print('###', Pmax)
     
     # run the tls iteratively (multiple signals) and on each sector
     for i,s in enumerate(np.unique(ts.lc.sectors)):
@@ -132,9 +131,9 @@ def run_tls_Nplanets(ts, Nplanets_max=3, pltt=True):
                 plt.axvline(results['period'], alpha=.4, lw=3)
                 plt.xlim(np.min(results['periods']), np.max(results['periods']))
                 plt.axvline(results.period, ls='--', alpha=.4)
-                for i in range(2,10):
-                    plt.axvline(i*results.period, ls='--', alpha=.4)
-                    plt.axvline(results.period/i, ls='--', alpha=.4)
+                for j in range(2,10):
+                    plt.axvline(j*results.period, ls='--', alpha=.4)
+                    plt.axvline(results.period/j, ls='--', alpha=.4)
                 plt.ylabel('SDE_raw', fontsize=12)
                 plt.xlabel('Period [days]', fontsize=12)
                 plt.xlim(0, np.max(results.periods)*1.02)
