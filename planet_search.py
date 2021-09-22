@@ -54,7 +54,7 @@ def read_in_lightcurve(tic, minsector=1, maxsector=56, use_20sec=False, pltt=Tru
             plt.ylabel('Normalized flux', fontsize=12)
             plt.legend(fontsize=12)
         plt.xlabel('BJD - 2,457,000', fontsize=12)
-        plt.savefig('%s/plots/rawLC_TIC%i.png'%(cs.repo_dir, ts.tic))
+        plt.savefig('%s/MAST/TESS/TIC%i/rawLC.png'%(cs.repo_dir, ts.tic))
         plt.close('all')
             
     return ts
@@ -89,7 +89,7 @@ def detrend_lightcurve_median(ts, window_length_hrs=12, pltt=True):
             plt.ylabel('Normalized flux', fontsize=12)
             plt.legend(fontsize=12)
         plt.xlabel('BJD - 2,457,000', fontsize=12)
-        plt.savefig('%s/plots/detrendedLC_TIC%i.png'%(cs.repo_dir, ts.tic))
+        plt.savefig('%s/MAST/TESS/TIC%i/detrendedLC.png'%(cs.repo_dir, ts.tic))
         plt.close('all')
     
 
@@ -138,7 +138,7 @@ def run_tls_Nplanets(ts, Nplanets_max=3, pltt=True):
                 plt.ylabel('SDE_raw', fontsize=12)
                 plt.xlabel('Period [days]', fontsize=12)
                 plt.xlim(0, np.max(results.periods)*1.02)
-                plt.savefig('%s/plots/sde_tic%i_s%.2d_run%i'%(cs.repo_dir,ts.tic,s,n+1))
+                plt.savefig('%s/MAST/TESS/TIC%i/sde_s%.2d_run%i'%(cs.repo_dir,ts.tic,s,n+1))
                 plt.close('all')
 
 
