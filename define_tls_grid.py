@@ -1,6 +1,7 @@
 import numpy as np
 import pylab as plt
 import constants as cs
+import misc
 
 
 def get_Ntransit_vs_period(tic, bjd, sectors, pltt=True):
@@ -9,13 +10,14 @@ def get_Ntransit_vs_period(tic, bjd, sectors, pltt=True):
     # try getting periods recovered for a given lc
     Pmax = np.arange(6,51)
     N = 500
-    Nsect = np.unique(sectors).size
+    sect_ranges = misc.get_consecutive_sectors(np.unique(sectors))
+    Nsect = len(sect_ranges)
     Ntransits_covered = np.zeros((Nsect,len(Pmax),N))
 
     # for each sector
     Pmax_per_sector = np.zeros(Nsect)
-    for si,s in enumerate(np.unique(sectors)):
-        g = sectors == s
+    for si,s in enumerate(sect_ranges):
+        g = np.in1d(sectors, s)
 
         # for each possible maximum period
         for i,p in enumerate(Pmax):
@@ -33,12 +35,13 @@ def get_Ntransit_vs_period(tic, bjd, sectors, pltt=True):
 
     # plot
     if pltt:
-        Nsect = np.unique(sectors).size
         plt.figure(figsize=(8,4))
-        for i,s in enumerate(np.unique(sectors)):
-            g = sectors == s
-            plt.plot(Pmax, np.median(Ntransits_covered[i], axis=1), '-',
-                     label='sector %i'%s)
+        for si,s in enumerate(sect_ranges):
+            g = np.in1d(sectors, s)
+            slabel = '%i'%s[0] if len(s) == 1 else '%i-%i'%(min(s),max(s))
+            plt.plot(Pmax, np.median(Ntransits_covered[si], axis=1), '-',
+                     label='sector %s'%slabel)
+            plt.axvline(Pmax_per_sector[si], ls='--', lw=.8, color='k')
         plt.title('TIC %i'%tic, fontsize=12)
         plt.ylabel('Median # of transits covered', fontsize=12)
         plt.xlabel('Maximum period [days]', fontsize=12)

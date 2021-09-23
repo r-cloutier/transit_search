@@ -21,7 +21,8 @@ class transit_search:
         self.lc = self.LC()
         self.star = self.STAR()
         self.tls = self.TLS()
-        
+        self.vetting = self.VETTING()
+
 
     def pickleobject(self):
         fObj = open(self.fname_full, 'wb')
@@ -35,5 +36,6 @@ class transit_search:
         pass
     class TLS:
         pass
-
+    class VETTING:
+        pass
                 
