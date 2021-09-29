@@ -41,7 +41,6 @@ def vet_multiple_sectors(ts):
     Nsect = len(ts.tls.__dict__) / cs.Nplanets_max
     if Nsect <= 1:
         pass
-
     else:
         ts.vetting.vetting_mask *= ts.vetting.NoccurrencesOIs > 1
         

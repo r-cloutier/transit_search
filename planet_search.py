@@ -20,10 +20,11 @@ def run_full_planet_search(tic, use_20sec=False):
 
     kwargs = {'window_length_hrs': 24}
     detrend_lightcurve_median(ts, **kwargs)
-
-    #run_tls_Nplanets(ts)
+    run_tls_Nplanets(ts)
 
     #vet_planets(ts)
+
+    ts.pickleobject()
     
     return ts
     

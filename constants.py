@@ -7,7 +7,7 @@ t0 = 2457e3
 repo_dir = '/Users/ryancloutier/Research/TLS'
 
 # fractional threshold for identifying duplicate periods in the TLS
-P_duplicate_fraction = 0.1
+P_duplicate_fraction = 0.02
 
 # lowest TESS sector to search for data
 minsector = 1

@@ -2,7 +2,10 @@
 *~
 *pyc
 *notes*
+*.zip
+derive_SNR*
 /MAST
 /__pycache__
 /.ipynb_checkpoints
 /plots
+/Output
