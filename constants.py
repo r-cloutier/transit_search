@@ -19,4 +19,4 @@ maxsector = 41
 Nplanets_min = 3
 
 # SDE threshold to continue the planet search (FAP=1% see https://arxiv.org/abs/1901.02015)
-SDEraw_threshold = 7
+SDE_threshold = 7

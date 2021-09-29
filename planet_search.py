@@ -144,22 +144,22 @@ def run_tls_Nplanets(ts, pltt=True):
                 # plotting
                 plt.figure(figsize=(8,4))
                 plt.title('TIC %i - Sector(s) %s - TLS Run %i - Period %.3f days'%(ts.tic,slabel,n,results.period))
-                plt.plot(results.periods, results.power_raw, 'k-', lw=.5)
+                plt.plot(results.periods, results.power, 'k-', lw=.5)
                 plt.axvline(results['period'], alpha=.4, lw=3)
                 plt.xlim(np.min(results['periods']), np.max(results['periods']))
-                plt.axhline(cs.SDEraw_threshold, ls='--', alpha=.4, lw=.8)
+                plt.axhline(cs.SDE_threshold, ls='--', alpha=.4, lw=.8)
                 plt.axvline(results.period, ls='--', alpha=.4)
                 for j in range(2,10):
                     plt.axvline(j*results.period, ls='--', alpha=.4)
                     plt.axvline(results.period/j, ls='--', alpha=.4)
-                plt.ylabel('SDE_raw', fontsize=12)
+                plt.ylabel('SDE', fontsize=12)
                 plt.xlabel('Period [days]', fontsize=12)
                 plt.xlim(0, np.max(results.periods)*1.02)
                 plt.savefig('%s/MAST/TESS/TIC%i/sde_s%s_run%i'%(cs.repo_dir,ts.tic,slabel,n))
                 plt.close('all')
 
             # continue the planet search?
-            above_threshold = results['SDE_raw'] >= cs.SDEraw_threshold
+            above_threshold = results['SDE'] >= cs.SDE_threshold
             n += 1
             
 
