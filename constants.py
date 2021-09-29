@@ -1,4 +1,4 @@
-global t0, plot_dir, minsector, maxsector, P_duplicate_fraction, Nplanets_max
+global t0, plot_dir, minsector, maxsector, P_duplicate_fraction, SDE_threshold, Nplanets_min
 
 # time offset for plotting
 t0 = 2457e3
@@ -15,5 +15,8 @@ minsector = 1
 # highest TESS sector to search for data
 maxsector = 41
 
-# maximum number of planets to search for with the TLS
-Nplanets_max = 3
+# minimum number of planets to search for with the TLS
+Nplanets_min = 3
+
+# SDE threshold to continue the planet search (FAP=1% see https://arxiv.org/abs/1901.02015)
+SDEraw_threshold = 7

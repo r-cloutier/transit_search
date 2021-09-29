@@ -128,24 +128,26 @@ def run_tls_Nplanets(ts, pltt=True):
         lc_input = ts.lc.bjd[g], ts.lc.fdetrend[g], ts.lc.efnorm[g]
         slabel = '%i'%s[0] if len(s) == 1 else '%i-%i'%(min(s),max(s))
 
-        for n in range(cs.Nplanets_max):
-
-            print('Running TLS for planet %i (sector(s) %s)'%(n+1,slabel))
+        above_threshold, n = True, 1
+        while above_threshold or n <= cs.Nplanets_min:
+        
+            print('Running TLS for planet %i (sector(s) %s)'%(n,slabel))
             
             # run tls on this sector
             results = _run_tls(*lc_input, ts.star.ab, period_max=Pmax[i])
-            setattr(ts.tls, 'results_%i_s%s'%(n+1,slabel), results)
+            setattr(ts.tls, 'results_%i_s%s'%(n,slabel), results)
 
             # mask out found signal
-            lc_input = _mask_transits(*lc_input, getattr(ts.tls, 'results_%i_s%s'%(n+1,slabel)))
+            lc_input = _mask_transits(*lc_input, getattr(ts.tls, 'results_%i_s%s'%(n,slabel)))
 
             if pltt:
                 # plotting
                 plt.figure(figsize=(8,4))
-                plt.title('TIC %i - Sector(s) %s - TLS Run %i - Period %.3f days'%(ts.tic,slabel,n+1,results.period))
+                plt.title('TIC %i - Sector(s) %s - TLS Run %i - Period %.3f days'%(ts.tic,slabel,n,results.period))
                 plt.plot(results.periods, results.power_raw, 'k-', lw=.5)
                 plt.axvline(results['period'], alpha=.4, lw=3)
                 plt.xlim(np.min(results['periods']), np.max(results['periods']))
+                plt.axhline(cs.SDEraw_threshold, ls='--', alpha=.4, lw=.8)
                 plt.axvline(results.period, ls='--', alpha=.4)
                 for j in range(2,10):
                     plt.axvline(j*results.period, ls='--', alpha=.4)
@@ -153,10 +155,13 @@ def run_tls_Nplanets(ts, pltt=True):
                 plt.ylabel('SDE_raw', fontsize=12)
                 plt.xlabel('Period [days]', fontsize=12)
                 plt.xlim(0, np.max(results.periods)*1.02)
-                plt.savefig('%s/MAST/TESS/TIC%i/sde_s%s_run%i'%(cs.repo_dir,ts.tic,slabel,n+1))
+                plt.savefig('%s/MAST/TESS/TIC%i/sde_s%s_run%i'%(cs.repo_dir,ts.tic,slabel,n))
                 plt.close('all')
 
-
+            # continue the planet search?
+            above_threshold = results['SDE_raw'] >= cs.SDEraw_threshold
+            n += 1
+            
 
 
 def vet_planets(ts):
