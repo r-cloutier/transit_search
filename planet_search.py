@@ -10,7 +10,7 @@ import transitleastsquares as tls
 import planet_vetting as pv
 
 
-def run_full_planet_search(tic, use_20sec=False):
+def run_full_planet_search(tic, use_20sec=False, window_length_hrs=12):
     '''
     Run each step of the transit search and save the results.
     '''
@@ -18,10 +18,9 @@ def run_full_planet_search(tic, use_20sec=False):
               'use_20sec': use_20sec, 'pltt': True}
     ts = read_in_lightcurve(tic, **kwargs)
 
-    kwargs = {'window_length_hrs': 24}
+    kwargs = {'window_length_hrs': window_length_hrs}
     detrend_lightcurve_median(ts, **kwargs)
     run_tls_Nplanets(ts)
-
     #vet_planets(ts)
 
     ts.pickleobject()
@@ -75,11 +74,11 @@ def detrend_lightcurve_median(ts, window_length_hrs=12, pltt=True):
     '''
     # detrend each sector individually and construct outlier mask
     kwargs = {'window_length_days': window_length_hrs/24}
-    ts.lc.fdetrend_full, ts.lc.mask = mdt.detrend_all_sectors(ts.lc.bjd_raw, ts.lc.fnorm_raw, ts.lc.sectors_raw, **kwargs)
+    ts.lc.fdetrend_full, ts.lc.model_full, ts.lc.mask = mdt.detrend_all_sectors(ts.lc.bjd_raw, ts.lc.fnorm_raw, ts.lc.sectors_raw, **kwargs)
 
     # mask outliers
-    p = np.vstack([ts.lc.bjd_raw,ts.lc.fnorm_raw,ts.lc.fdetrend_full,ts.lc.efnorm_raw,ts.lc.sectors_raw,ts.lc.qual_flags_raw]).T[ts.lc.mask].T
-    ts.lc.bjd, ts.lc.fnorm, ts.lc.fdetrend, ts.lc.efnorm, ts.lc.sectors, ts.lc.qual_flags = p
+    p = np.vstack([ts.lc.bjd_raw,ts.lc.fnorm_raw,ts.lc.fdetrend_full,ts.lc.efnorm_raw,ts.lc.model_full,ts.lc.sectors_raw,ts.lc.qual_flags_raw]).T[ts.lc.mask].T
+    ts.lc.bjd, ts.lc.fnorm, ts.lc.fdetrend, ts.lc.efnorm, ts.lc.model, ts.lc.sectors, ts.lc.qual_flags = p
 
     # get sectors
     sect_ranges = misc.get_consecutive_sectors(np.unique(ts.lc.sectors))
@@ -92,11 +91,13 @@ def detrend_lightcurve_median(ts, window_length_hrs=12, pltt=True):
             g = np.in1d(ts.lc.sectors, s)
             plt.subplot(Nsect,1,i+1)
             slabel = '%i'%s[0] if len(s) == 1 else '%i-%i'%(min(s),max(s))
-            plt.plot(ts.lc.bjd[g]-cs.t0,
-                     ts.lc.fnorm[g]+(ts.lc.fdetrend[g].max()-ts.lc.fnorm[g].min()),
-                     'o', ms=1, alpha=.5, label='sector %s'%slabel)
+            dy = ts.lc.fdetrend[g].max()-ts.lc.fnorm[g].min()
+            plt.plot(ts.lc.bjd[g]-cs.t0, ts.lc.fnorm[g]+dy, 'o', ms=1,
+                     alpha=.5, label='sector %s'%slabel)
+            plt.plot(ts.lc.bjd[g]-cs.t0, ts.lc.model[g]+dy, 'k-', lw=1)
             plt.plot(ts.lc.bjd[g]-cs.t0, ts.lc.fdetrend[g], 'o', ms=1, alpha=.5)
-            if i == 0: plt.title('TIC %i'%ts.tic, fontsize=12)
+            if i == 0: 
+                plt.title('TIC %i (window length = %.1f hrs)'%(ts.tic, window_length_hrs), fontsize=12)
             plt.ylabel('Normalized flux', fontsize=12)
             plt.legend(frameon=True, fontsize=12)
         plt.xlabel('BJD - 2,457,000', fontsize=12)
