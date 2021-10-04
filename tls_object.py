@@ -24,8 +24,9 @@ class transit_search:
         self.vetting = self.VETTING()
 
 
-    def pickleobject(self):
-        fObj = open(self.fname_full, 'wb')
+    def pickleobject(self, fname=''):
+        fname = self.fname_full if fname == '' else fname
+        fObj = open(fname, 'wb')
         pickle.dump(self, fObj)
         fObj.close()
 

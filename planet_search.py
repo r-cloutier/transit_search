@@ -155,7 +155,8 @@ def run_tls_Nplanets(ts, pltt=True):
                 plt.ylabel('SDE', fontsize=12)
                 plt.xlabel('Period [days]', fontsize=12)
                 plt.xlim(0, np.max(results.periods)*1.02)
-                plt.savefig('%s/MAST/TESS/TIC%i/sde_s%s_run%i'%(cs.repo_dir,ts.tic,slabel,n))
+                label20 = '%s'%(np.median(np.diff(ts.lc.bjd[g]))*24*60 < 1)
+                plt.savefig('%s/MAST/TESS/TIC%i/sde_s%s_run%i_use20%s'%(cs.repo_dir,ts.tic,slabel,n,label20.upper()))
                 plt.close('all')
 
             # continue the planet search?
