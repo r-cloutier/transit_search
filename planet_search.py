@@ -19,10 +19,13 @@ def run_full_planet_search(tic, use_20sec=False, window_length_hrs=12):
     ts = read_in_lightcurve(tic, **kwargs)
 
     kwargs = {'window_length_hrs': window_length_hrs}
+    
     detrend_lightcurve_median(ts, **kwargs)
+    
     run_tls_Nplanets(ts)
-    #vet_planets(ts)
-
+    
+    vet_planets(ts)
+    
     ts.pickleobject()
     
     return ts
@@ -45,7 +48,7 @@ def read_in_lightcurve(tic, minsector=1, maxsector=56, use_20sec=False, pltt=Tru
 
     # get sectors
     sect_ranges = misc.get_consecutive_sectors(np.unique(ts.lc.sectors_raw))
-    Nsect = len(sect_ranges)
+    ts.lc.Nsect = len(sect_ranges)
     
     # save LC plot
     if pltt:
@@ -135,7 +138,7 @@ def run_tls_Nplanets(ts, pltt=True):
             
             # run tls on this sector
             results = _run_tls(*lc_input, ts.star.ab, period_max=Pmax[i])
-            setattr(ts.tls, 'results_%i_s%s'%(n,slabel), results)
+            setattr(ts.tls, 'results_%i_s%s'%(n,slabel.replace('-','_')), results)
 
             # mask out found signal
             lc_input = _mask_transits(*lc_input, getattr(ts.tls, 'results_%i_s%s'%(n,slabel)))
@@ -167,10 +170,15 @@ def run_tls_Nplanets(ts, pltt=True):
 
 def vet_planets(ts):
     '''
-    Given the TLS results, vet planets using various metrics. 
+    Given the TLS results, vet potential planetary signals and vet them 
+    using various metrics. 
     '''
+    # remove duplicate periodicities + save planet and vetting parameters  
+    pv.get_POIs(ts)
     
-    return ts
+    # apply vetting criteria
+    pv.vet_multiple_sectors(ts)
+    pv.vet_odd_even_difference(ts)    
 
 
 
