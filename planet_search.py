@@ -1,5 +1,6 @@
 import numpy as np
 import pylab as plt
+import pandas as pd
 import pdb, misc
 import constants as cs
 from tls_object import transit_search, loadpickle
@@ -8,6 +9,7 @@ import median_detrend as mdt
 import define_tls_grid as dtg
 import transitleastsquares as tls
 import planet_vetting as pv
+import inject_planets as injp
 
 
 def run_full_planet_search(tic, use_20sec=False, window_length_hrs=12):
@@ -21,12 +23,17 @@ def run_full_planet_search(tic, use_20sec=False, window_length_hrs=12):
     kwargs = {'window_length_hrs': window_length_hrs}
     
     detrend_lightcurve_median(ts, **kwargs)
-    
+   
+    # TEMP
+    p, rp = 4.44, .8
+    injp.inject_custom_planet(ts, p, rp)
+ 
     run_tls_Nplanets(ts)
     
     vet_planets(ts)
     
-    ts.pickleobject()
+    # TEMP
+    ts.pickleobject(fname='MAST/TESS/TIC%i/TESSLC_planetsearch_injected'%ts.tic)
     
     return ts
     
@@ -46,16 +53,20 @@ def read_in_lightcurve(tic, minsector=1, maxsector=56, use_20sec=False, pltt=Tru
     ts = transit_search(tic, 'TESSLC_planetsearch')
     ts.lc.bjd_raw, ts.lc.fnorm_raw, ts.lc.efnorm_raw, ts.lc.sectors_raw, ts.lc.qual_flags_raw, ts.lc.texps_raw = p
 
+    # get approximate stellar parameters
+    p = tls.catalog_info(TIC_ID=tic)
+    ts.star.ab, ts.star.Ms, ts.star.Ms_min, ts.star.Ms_max, ts.star.Rs, ts.star.Rs_min, ts.star.Rs_max = p
+
     # get sectors
-    sect_ranges = misc.get_consecutive_sectors(np.unique(ts.lc.sectors_raw))
-    ts.lc.Nsect = len(sect_ranges)
-    
+    ts.lc.sect_ranges = misc.get_consecutive_sectors(np.unique(ts.lc.sectors_raw))
+    ts.lc.Nsect = len(ts.lc.sect_ranges)
+ 
     # save LC plot
     if pltt:
-        plt.figure(figsize=(8,Nsect*4))
-        for i,s in enumerate(sect_ranges):
+        plt.figure(figsize=(8,ts.lc.Nsect*4))
+        for i,s in enumerate(ts.lc.sect_ranges):
             g = np.in1d(ts.lc.sectors_raw, s)
-            plt.subplot(Nsect,1,i+1)
+            plt.subplot(ts.lc.Nsect,1,i+1)
             slabel = '%i'%s[0] if len(s) == 1 else '%i-%i'%(min(s),max(s))
             plt.plot(ts.lc.bjd_raw[g]-cs.t0, ts.lc.fnorm_raw[g], 'o', ms=1,
                      alpha=.5, label='sector %s'%slabel)
@@ -83,16 +94,12 @@ def detrend_lightcurve_median(ts, window_length_hrs=12, pltt=True):
     p = np.vstack([ts.lc.bjd_raw,ts.lc.fnorm_raw,ts.lc.fdetrend_full,ts.lc.efnorm_raw,ts.lc.model_full,ts.lc.sectors_raw,ts.lc.qual_flags_raw]).T[ts.lc.mask].T
     ts.lc.bjd, ts.lc.fnorm, ts.lc.fdetrend, ts.lc.efnorm, ts.lc.model, ts.lc.sectors, ts.lc.qual_flags = p
 
-    # get sectors
-    sect_ranges = misc.get_consecutive_sectors(np.unique(ts.lc.sectors))
-    Nsect = len(sect_ranges)
-
     # save LC plot
     if pltt:
-        plt.figure(figsize=(8,Nsect*4))
-        for i,s in enumerate(sect_ranges):
+        plt.figure(figsize=(8,ts.lc.Nsect*4))
+        for i,s in enumerate(ts.lc.sect_ranges):
             g = np.in1d(ts.lc.sectors, s)
-            plt.subplot(Nsect,1,i+1)
+            plt.subplot(ts.lc.Nsect,1,i+1)
             slabel = '%i'%s[0] if len(s) == 1 else '%i-%i'%(min(s),max(s))
             dy = ts.lc.fdetrend[g].max()-ts.lc.fnorm[g].min()
             plt.plot(ts.lc.bjd[g]-cs.t0, ts.lc.fnorm[g]+dy, 'o', ms=1,
@@ -114,18 +121,11 @@ def run_tls_Nplanets(ts, pltt=True):
     Run the Transit-Least-Squares search for multiple signals on an input 
     (detrended) light curve.
     '''
-    # get approximate stellar parameters
-    p = tls.catalog_info(TIC_ID=ts.tic)
-    ts.star.ab, ts.star.Ms, ts.star.Ms_min, ts.star.Ms_max, ts.star.Rs, ts.star.Rs_min, ts.star.Rs_max = p
-
     # get maximum period for 2 transits on average
     Pmax,_,_ = dtg.get_Ntransit_vs_period(ts.tic, ts.lc.bjd, ts.lc.sectors)
     
     # run the tls iteratively (multiple signals) and on each set of sectors
-    sect_ranges = misc.get_consecutive_sectors(np.unique(ts.lc.sectors))
-    Nsect = len(sect_ranges)
-    
-    for i,s in enumerate(sect_ranges):
+    for i,s in enumerate(ts.lc.sect_ranges):
         
         g = np.in1d(ts.lc.sectors, s)
         lc_input = ts.lc.bjd[g], ts.lc.fdetrend[g], ts.lc.efnorm[g]
@@ -179,6 +179,20 @@ def vet_planets(ts):
     # apply vetting criteria
     pv.vet_multiple_sectors(ts)
     pv.vet_odd_even_difference(ts)    
+
+    # save vetted planet signals
+    labels = ['vetted?','period','T0','duration [hours]','depth [ppt]','oddevensigma','SDE']
+    df = pd.DataFrame(np.vstack([ts.vetting.vetting_mask.astype(int),
+                                 ts.vetting.POIs,
+                                 ts.vetting.T0OIs,
+                                 ts.vetting.DOIs,
+                                 ts.vetting.ZOIs,
+                                 ts.vetting.oddevensigmaOIs,
+                                 ts.vetting.SDEOIs]).T,
+                      columns=labels)
+    df = df.sort_values('SDE', ascending=False)
+    df.to_csv('%s/MAST/TESS/TIC%i/planet_candidates'%(cs.repo_dir,ts.tic),
+              index=False)
 
 
 

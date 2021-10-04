@@ -26,8 +26,8 @@ def get_POIs(ts):
     for res in ts.tls.__dict__.keys():
         POIsv1 = np.vstack([POIsv1, [getattr(ts.tls,res).period,
                                      getattr(ts.tls,res).T0,
-                                     getattr(ts.tls,res).duration*24,
-                                     1-getattr(ts.tls,res).depth,
+                                     getattr(ts.tls,res).duration*24,  # hours
+                                     (1-getattr(ts.tls,res).depth)*1e3,  # ppt
                                      getattr(ts.tls,res).odd_even_mismatch,
                                      getattr(ts.tls,res).SDE]])
     POIsv1 = POIsv1[np.argsort(POIsv1,0)[:,0]]
