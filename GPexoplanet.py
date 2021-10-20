@@ -235,3 +235,4 @@ if __name__ == '__main__':
     #theta = [1.094, 0.039], [1.10, 0.023], [-13.7439,1e-3], 6.2706, .302
     theta = [.53, .053], [.53, .053], [2458844.381227-ref_time,1e-3], 6.2222, 1.847
     model, map_soln, extras = build_model_1planet(bjd_shift,fexo,texps.mean(),theta)
+

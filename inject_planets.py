@@ -4,12 +4,13 @@ import batman, misc, pdb
 from tls_object import transit_search
 
 
-def inject_custom_planet(ts, P, RpRearth, b=0, ecc=0):
+def inject_custom_planet(ts, P, RpRearth, b=0, ecc=0, seed=0):
     '''
     Inject one planet with user-defined parameters into an existing light
     curve contained within a tls object.
     '''
     # get transit model
+    np.random.seed(int(seed))
     t0 = float(np.random.uniform(ts.lc.bjd.min(), ts.lc.bjd.max()))
     omegadeg = float(np.random.uniform(0,360))
     args = ts.lc.bjd, ts.star.Ms, ts.star.Rs, P, t0, RpRearth, b, ecc, omegadeg, ts.star.ab

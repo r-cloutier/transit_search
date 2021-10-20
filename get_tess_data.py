@@ -139,3 +139,4 @@ def convert2exoplanet(bjd, fnorm, efnorm):
 def convert2norm(bjd_shift, fexo, efexo, ref_time):
     return bjd_shift+ref_time, 1e-3*fexo+1, 1e-3*efexo
 
+
