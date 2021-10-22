@@ -1,6 +1,7 @@
 from operator import itemgetter
 from itertools import groupby
 
+
 def get_consecutive_sectors(sectors):
     '''
     Returns a list of lists where each element is a list of consecutive sectors.

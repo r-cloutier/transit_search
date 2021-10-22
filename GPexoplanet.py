@@ -1,4 +1,5 @@
-from imports import *
+import numpy as np
+import pylab as plt
 import exoplanet as xo
 import pymc3 as pm
 import aesara_theano_fallback.tensor as tt
@@ -6,7 +7,6 @@ import pymc3_ext as pmx
 from celerite2.theano import terms, GaussianProcess
 import pickle, pdb
 import astropy.units as u
-import get_tess_data as gtd
 
 
 def build_model_0planets(x, y, mask=None, start=None):
@@ -186,7 +186,7 @@ def build_model_1planet(x, y, texp, theta, mask=None, start=None):
 
 def _sigma_clip(fT, extras, sig=5):
     sig = 5
-    mod = extras["gp_pred"] + extras["mean"]
+    mod = extras["gp_pred"]
     resid = fT - mod
     rms = np.sqrt(np.median(resid ** 2))
     mask = np.abs(resid) < sig*rms
@@ -206,33 +206,33 @@ def convert2norm(bjd_shift, fexo, efexo, ref_time):
 
 
 
-def detrend_light_curve(bjd, fnorm, efnorm):
-    # get units for exoplanet
-    bjd_shift,fexo,efexo,ref_time = convert2exoplanet(bjd, fnorm, efnorm)
+def detrend_light_curve(bjd, fnorm, efnorm, sectors):
+    assert bjd.size == fnorm.size
+    assert bjd.size == efnorm.size
+    assert bjd.size == sectors.size
 
-    # run initial optimization on the GP hyperparams
-    model0, map_soln0, extras0 = build_model_0planets(bjd_shift, fexo)
+    fdetrend, mask = np.zeros_like(bjd), np.zeros_like(bjd)
+    for s in np.unique(sectors):
+        # detrend this sector's LC
+        g = sectors == s
 
-    # clip outliers
-    mask = _sigma_clip(fexo, extras0)
+        # get units for exoplanet
+        bjd_shift,fexo,efexo,ref_time = convert2exoplanet(bjd[g], fnorm[g], efnorm[g])
 
-    # redo optimization
-    model,map_soln,extras = build_model_0planets(bjd_shift,fexo,mask,map_soln0)
+        # run initial optimization on the GP hyperparams
+        model0, map_soln0, extras0 = build_model_0planets(bjd_shift, fexo)
 
-    # detrend LC
-    bjd,fdetrend,efnorm = convert2norm(bjd_shift, fexo-extras['gp_pred'],
-                                       efexo, ref_time)
-    return bjd, fdetrend, efnorm, model, map_soln, extras
+        # clip outliers
+        mask[g] = _sigma_clip(fexo, extras0)
 
+        # redo optimization
+        model,map_soln,extras = build_model_0planets(bjd_shift,fexo,mask[g].astype(bool),map_soln0)
+        gp = np.zeros_like(fexo) + np.nan
+        gp[mask[g].astype(bool)] = extras['gp_pred']
 
+        # detrend LC
+        _,fdetrend[g],_ = convert2norm(bjd_shift, fexo-gp, efexo, ref_time)
 
+    return fdetrend, mask.astype(bool), map_soln, extras
 
-if __name__ == '__main__':
-    bjd, flux, eflux, sectors, qual_flags, texps = \
-        gtd.read_TESS_data(318022259, minsector=20, maxsector=20)
-    bjd_shift, fexo,_, ref_time = gtd.convert2exoplanet(bjd, flux, eflux)
-
-    #theta = [1.094, 0.039], [1.10, 0.023], [-13.7439,1e-3], 6.2706, .302
-    theta = [.53, .053], [.53, .053], [2458844.381227-ref_time,1e-3], 6.2222, 1.847
-    model, map_soln, extras = build_model_1planet(bjd_shift,fexo,texps.mean(),theta)
 

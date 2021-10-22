@@ -5,6 +5,7 @@ import constants as cs
 from tls_object import transit_search, loadpickle
 import get_tess_data as gtd
 import median_detrend as mdt
+import GPexoplanet as gpx
 import define_tls_grid as dtg
 import transitleastsquares as tls
 import planet_vetting as pv
@@ -17,10 +18,13 @@ def run_full_planet_search(tic, use_20sec=False):
     kwargs = {'minsector': cs.minsector, 'maxsector': cs.maxsector,
               'use_20sec': use_20sec, 'pltt': True}
     ts = read_in_lightcurve(tic, **kwargs)
-    kwargs = {'window_length_hrs': 24}
-    detrend_lightcurve_median(ts, **kwargs)
+
+    #kwargs = {'window_length_hrs': 24}    
+    #detrend_lightcurve_median(ts, **kwargs)
+    detrend_lightcurve_GP(ts)
+
     run_tls_Nplanets(ts)
-    #vet_planets(ts)
+    vet_planets(ts)
     ts.pickleobject()
     
     return ts
@@ -42,15 +46,15 @@ def read_in_lightcurve(tic, minsector=1, maxsector=56, use_20sec=False, pltt=Tru
     ts.lc.bjd_raw, ts.lc.fnorm_raw, ts.lc.efnorm_raw, ts.lc.sectors_raw, ts.lc.qual_flags_raw, ts.lc.texps_raw = p
 
     # get sectors
-    sect_ranges = misc.get_consecutive_sectors(np.unique(ts.lc.sectors_raw))
-    Nsect = len(sect_ranges)
+    ts.lc.sect_ranges = misc.get_consecutive_sectors(np.unique(ts.lc.sectors_raw))
+    ts.lc.Nsect = len(ts.lc.sect_ranges)
     
     # save LC plot
     if pltt:
-        plt.figure(figsize=(8,Nsect*4))
-        for i,s in enumerate(sect_ranges):
+        plt.figure(figsize=(8,ts.lc.Nsect*4))
+        for i,s in enumerate(ts.lc.sect_ranges):
             g = np.in1d(ts.lc.sectors_raw, s)
-            plt.subplot(Nsect,1,i+1)
+            plt.subplot(ts.lc.Nsect,1,i+1)
             slabel = '%i'%s[0] if len(s) == 1 else '%i-%i'%(min(s),max(s))
             plt.plot(ts.lc.bjd_raw[g]-cs.t0, ts.lc.fnorm_raw[g], 'o', ms=1,
                      alpha=.5, label='sector %s'%slabel)
@@ -77,17 +81,49 @@ def detrend_lightcurve_median(ts, window_length_hrs=12, pltt=True):
     # mask outliers
     p = np.vstack([ts.lc.bjd_raw,ts.lc.fnorm_raw,ts.lc.fdetrend_full,ts.lc.efnorm_raw,ts.lc.sectors_raw,ts.lc.qual_flags_raw]).T[ts.lc.mask].T
     ts.lc.bjd, ts.lc.fnorm, ts.lc.fdetrend, ts.lc.efnorm, ts.lc.sectors, ts.lc.qual_flags = p
-
-    # get sectors
-    sect_ranges = misc.get_consecutive_sectors(np.unique(ts.lc.sectors))
-    Nsect = len(sect_ranges)
+    ts.lc.detrend_model = ts.lc.fnorm / ts.lc.fdetrend
 
     # save LC plot
     if pltt:
-        plt.figure(figsize=(8,Nsect*4))
-        for i,s in enumerate(sect_ranges):
+        plt.figure(figsize=(8,ts.lc.Nsect*4))
+        for i,s in enumerate(ts.lc.sect_ranges):
             g = np.in1d(ts.lc.sectors, s)
-            plt.subplot(Nsect,1,i+1)
+            plt.subplot(ts.lc.Nsect,1,i+1)
+            slabel = '%i'%s[0] if len(s) == 1 else '%i-%i'%(min(s),max(s))
+            plt.plot(ts.lc.bjd[g]-cs.t0,
+                     ts.lc.fnorm[g]+(ts.lc.fdetrend[g].max()-ts.lc.fnorm[g].min()),
+                     'o', ms=1, alpha=.5, label='sector %s'%slabel)
+            plt.plot(ts.lc.bjd[g]-cs.t0, ts.lc.fdetrend[g], 'o', ms=1, alpha=.5)
+            plt.plot(ts.lc.bjd[g]-cs.t0, ts.lc.detrend_model[g], 'k-')
+            if i == 0: plt.title('TIC %i'%ts.tic, fontsize=12)
+            plt.ylabel('Normalized flux', fontsize=12)
+            plt.legend(frameon=True, fontsize=12)
+        plt.xlabel('BJD - 2,457,000', fontsize=12)
+        plt.savefig('%s/MAST/TESS/TIC%i/detrendedLC.png'%(cs.repo_dir, ts.tic))
+        plt.close('all')
+    
+
+
+def detrend_lightcurve_GP(ts, pltt=True):
+    '''
+    Detrend the light curve using a GP with a SHO kernel.
+    '''
+    # detrend each sector individually and construct outlier mask
+    #kwargs = {'window_length_days': window_length_hrs/24}
+    #ts.lc.fdetrend_full, ts.lc.mask = mdt.detrend_all_sectors(ts.lc.bjd_raw, ts.lc.fnorm_raw, ts.lc.sectors_raw, **kwargs)
+    ts.lc.fdetrend_full,ts.lc.mask,map_soln,extras = gpx.detrend_light_curve(ts.lc.bjd_raw, ts.lc.fnorm_raw, 
+                                                                             ts.lc.efnorm_raw, ts.lc.sectors_raw)
+
+    # mask outliers
+    p = np.vstack([ts.lc.bjd_raw,ts.lc.fnorm_raw,ts.lc.fdetrend_full,ts.lc.efnorm_raw,ts.lc.sectors_raw,ts.lc.qual_flags_raw]).T[ts.lc.mask].T
+    ts.lc.bjd, ts.lc.fnorm, ts.lc.fdetrend, ts.lc.efnorm, ts.lc.sectors, ts.lc.qual_flags = p
+
+    # save LC plot
+    if pltt:
+        plt.figure(figsize=(8,ts.lc.Nsect*4))
+        for i,s in enumerate(ts.lc.sect_ranges):
+            g = np.in1d(ts.lc.sectors, s)
+            plt.subplot(ts.lc.Nsect,1,i+1)
             slabel = '%i'%s[0] if len(s) == 1 else '%i-%i'%(min(s),max(s))
             plt.plot(ts.lc.bjd[g]-cs.t0,
                      ts.lc.fnorm[g]+(ts.lc.fdetrend[g].max()-ts.lc.fnorm[g].min()),
@@ -99,7 +135,7 @@ def detrend_lightcurve_median(ts, window_length_hrs=12, pltt=True):
         plt.xlabel('BJD - 2,457,000', fontsize=12)
         plt.savefig('%s/MAST/TESS/TIC%i/detrendedLC.png'%(cs.repo_dir, ts.tic))
         plt.close('all')
-    
+
 
 
 def run_tls_Nplanets(ts, pltt=True):
@@ -111,47 +147,49 @@ def run_tls_Nplanets(ts, pltt=True):
     p = tls.catalog_info(TIC_ID=ts.tic)
     ts.star.ab, ts.star.Ms, ts.star.Ms_min, ts.star.Ms_max, ts.star.Rs, ts.star.Rs_min, ts.star.Rs_max = p
 
-    # get maximum period for 2 transits on average
-    Pmax,_,_ = dtg.get_Ntransit_vs_period(ts.tic, ts.lc.bjd, ts.lc.sectors)
-    
-    # run the tls iteratively (multiple signals) and on each set of sectors
-    sect_ranges = misc.get_consecutive_sectors(np.unique(ts.lc.sectors))
-    Nsect = len(sect_ranges)
-    
-    for i,s in enumerate(sect_ranges):
+    # plot Ntransits vs period
+    _=dtg.get_Ntransit_vs_period(ts.tic, ts.lc.bjd, ts.lc.sectors)
+
+    for i,s in enumerate(ts.lc.sect_ranges):
         
         g = np.in1d(ts.lc.sectors, s)
         lc_input = ts.lc.bjd[g], ts.lc.fdetrend[g], ts.lc.efnorm[g]
         slabel = '%i'%s[0] if len(s) == 1 else '%i-%i'%(min(s),max(s))
 
-        for n in range(cs.Nplanets_max):
+        # get maximum period for 2 transits on average
+        Pmax,_,_ = dtg.get_Ntransit_vs_period(ts.tic, ts.lc.bjd[g], ts.lc.sectors[g], pltt=False)
 
-            print('\nRunning TLS for planet %i (sector(s) %s)\n'%(n+1,slabel))
+        iter_count = 1
+        while (iter_count <= cs.Nplanets_min) or (np.any(results.power) >= cs.SDEthreshold):
+
+            print('\nRunning TLS for planet %i (sector(s) %s)\n'%(iter_count,slabel))
             
             # run tls on this sector
-            results = _run_tls(*lc_input, ts.star.ab, period_max=Pmax[i])
-            setattr(ts.tls, 'results_%i_s%s'%(n+1,slabel), results)
+            results = _run_tls(*lc_input, ts.star.ab, period_max=float(Pmax))
+            setattr(ts.tls, 'results_%i_s%s'%(iter_count,slabel), results)
 
             # mask out found signal
-            lc_input = _mask_transits(*lc_input, getattr(ts.tls, 'results_%i_s%s'%(n+1,slabel)))
+            lc_input = _mask_transits(*lc_input, getattr(ts.tls, 'results_%i_s%s'%(iter_count,slabel)))
 
             if pltt:
                 # plotting
                 plt.figure(figsize=(8,4))
-                plt.title('TIC %i - Sector(s) %s - TLS Run %i - Period %.3f days'%(ts.tic,slabel,n+1,results.period))
-                plt.plot(results.periods, results.power_raw, 'k-', lw=.5)
+                plt.title('TIC %i - Sector(s) %s - TLS Run %i - Period %.3f days'%(ts.tic,slabel,iter_count,results.period))
+                plt.plot(results.periods, results.power, 'k-', lw=.5)
                 plt.axvline(results['period'], alpha=.4, lw=3)
                 plt.xlim(np.min(results['periods']), np.max(results['periods']))
                 plt.axvline(results.period, ls='--', alpha=.4)
                 for j in range(2,10):
                     plt.axvline(j*results.period, ls='--', alpha=.4)
                     plt.axvline(results.period/j, ls='--', alpha=.4)
-                plt.ylabel('SDE_raw', fontsize=12)
+                plt.ylabel('SDE', fontsize=12)
                 plt.xlabel('Period [days]', fontsize=12)
                 plt.xlim(0, np.max(results.periods)*1.02)
-                plt.savefig('%s/MAST/TESS/TIC%i/sde_s%s_run%i'%(cs.repo_dir,ts.tic,slabel,n+1))
+                plt.savefig('%s/MAST/TESS/TIC%i/sde_s%s_run%i'%(cs.repo_dir,ts.tic,slabel,iter_count))
                 plt.close('all')
 
+            # update planet index
+            iter_count += 1
 
 
 
@@ -159,8 +197,11 @@ def vet_planets(ts):
     '''
     Given the TLS results, vet planets using various metrics. 
     '''
-    
-    return ts
+    pv.get_POIs(ts)
+    pv.vet_multiple_sectors(ts)
+    pv.vet_odd_even_difference(ts)
+    pv.save_planet_parameters(ts)
+
 
 
 
