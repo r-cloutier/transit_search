@@ -25,7 +25,7 @@ def get_POIs(ts):
     POIsv1 = POIsv1[np.argsort(POIsv1,0)[:,0]]
     
     # identify duplicates
-    POIsv2 = np.zeros((0,8))
+    POIsv2 = np.zeros((0,12))
     for p in POIsv1[:,0]:
         duplicates = np.isclose(POIsv1[:,0], p, rtol=cs.P_duplicate_fraction)
         avgP = np.average(POIsv1[duplicates,0], weights=POIsv1[duplicates,1])

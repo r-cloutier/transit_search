@@ -19,9 +19,13 @@ def run_full_planet_search(tic, use_20sec=False):
               'use_20sec': use_20sec, 'pltt': True}
     ts = read_in_lightcurve(tic, **kwargs)
 
-    #kwargs = {'window_length_hrs': 24}    
-    #detrend_lightcurve_median(ts, **kwargs)
-    detrend_lightcurve_GP(ts)
+    try:
+        detrend_lightcurve_GP(ts)
+        ts.lc.GPused = True
+    except:
+        kwargs = {'window_length_hrs': 24}    
+        detrend_lightcurve_median(ts, **kwargs)
+        ts.lc.GPused = False
 
     run_tls_Nplanets(ts)
     vet_planets(ts)
@@ -90,11 +94,11 @@ def detrend_lightcurve_median(ts, window_length_hrs=12, pltt=True):
             g = np.in1d(ts.lc.sectors, s)
             plt.subplot(ts.lc.Nsect,1,i+1)
             slabel = '%i'%s[0] if len(s) == 1 else '%i-%i'%(min(s),max(s))
-            plt.plot(ts.lc.bjd[g]-cs.t0,
-                     ts.lc.fnorm[g]+(ts.lc.fdetrend[g].max()-ts.lc.fnorm[g].min()),
+            dy = ts.lc.fdetrend[g].max()-ts.lc.fnorm[g].min()
+            plt.plot(ts.lc.bjd[g]-cs.t0, ts.lc.fnorm[g]+dy,
                      'o', ms=1, alpha=.5, label='sector %s'%slabel)
             plt.plot(ts.lc.bjd[g]-cs.t0, ts.lc.fdetrend[g], 'o', ms=1, alpha=.5)
-            plt.plot(ts.lc.bjd[g]-cs.t0, ts.lc.detrend_model[g], 'k-')
+            plt.plot(ts.lc.bjd[g]-cs.t0, ts.lc.detrend_model[g]+dy, 'k-')
             if i == 0: plt.title('TIC %i'%ts.tic, fontsize=12)
             plt.ylabel('Normalized flux', fontsize=12)
             plt.legend(frameon=True, fontsize=12)
@@ -117,6 +121,7 @@ def detrend_lightcurve_GP(ts, pltt=True):
     # mask outliers
     p = np.vstack([ts.lc.bjd_raw,ts.lc.fnorm_raw,ts.lc.fdetrend_full,ts.lc.efnorm_raw,ts.lc.sectors_raw,ts.lc.qual_flags_raw]).T[ts.lc.mask].T
     ts.lc.bjd, ts.lc.fnorm, ts.lc.fdetrend, ts.lc.efnorm, ts.lc.sectors, ts.lc.qual_flags = p
+    ts.lc.detrend_model = ts.lc.fnorm / ts.lc.fdetrend
 
     # save LC plot
     if pltt:
@@ -125,10 +130,11 @@ def detrend_lightcurve_GP(ts, pltt=True):
             g = np.in1d(ts.lc.sectors, s)
             plt.subplot(ts.lc.Nsect,1,i+1)
             slabel = '%i'%s[0] if len(s) == 1 else '%i-%i'%(min(s),max(s))
-            plt.plot(ts.lc.bjd[g]-cs.t0,
-                     ts.lc.fnorm[g]+(ts.lc.fdetrend[g].max()-ts.lc.fnorm[g].min()),
+            dy = (ts.lc.fdetrend[g].max()-ts.lc.fnorm[g].min())
+            plt.plot(ts.lc.bjd[g]-cs.t0, ts.lc.fnorm[g]+dy,
                      'o', ms=1, alpha=.5, label='sector %s'%slabel)
             plt.plot(ts.lc.bjd[g]-cs.t0, ts.lc.fdetrend[g], 'o', ms=1, alpha=.5)
+            plt.plot(ts.lc.bjd[g]-cs.t0, ts.lc.detrend_model[g]+dy, 'k-')
             if i == 0: plt.title('TIC %i'%ts.tic, fontsize=12)
             plt.ylabel('Normalized flux', fontsize=12)
             plt.legend(frameon=True, fontsize=12)

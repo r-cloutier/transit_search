@@ -3,6 +3,7 @@ import numpy as np
 from bs4 import BeautifulSoup
 from astropy.io import fits
 from astroquery.mast import Catalogs
+import constants as cs
 
 
 def listFD(url, ext=''):
@@ -14,16 +15,15 @@ def listFD(url, ext=''):
 def read_TESS_data(tic, minsector=1, maxsector=55, quality_cut=True,
                    use_20sec=True):
     # make directories
-    localdir = os.getcwd()
     try:
-        os.mkdir('%s/MAST'%localdir)
+        os.mkdir('%s/MAST'%cs.repo_dir)
     except OSError:
         pass
     try:
-        os.mkdir('%s/MAST/TESS'%localdir)
+        os.mkdir('%s/MAST/TESS'%cs.repo_dir)
     except OSError:
         pass
-    folder2 = '%s/MAST/TESS/TIC%i'%(localdir,tic)
+    folder2 = '%s/MAST/TESS/TIC%i'%(cs.repo_dir,tic)
     try:
          os.mkdir(folder2)
     except OSError:

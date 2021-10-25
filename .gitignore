@@ -5,7 +5,10 @@
 *.zip
 derive_SNR*
 /MAST
+/Input
 /__pycache__
 /.ipynb_checkpoints
 /plots
 /Output
+Untitled*
+main*py
