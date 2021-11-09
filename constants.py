@@ -4,7 +4,7 @@ global t0, plot_dir, minsector, maxsector, P_duplicate_fraction, Nplanets_min, S
 t0 = 2457e3
 
 # base directory that holds everything
-repo_dir = '/n/home10/rcloutier/TLS'
+repo_dir = '/Users/ryancloutier/Research/TLS'
 
 # fractional threshold for identifying duplicate periods in the TLS
 P_duplicate_fraction = 0.02
@@ -13,7 +13,7 @@ P_duplicate_fraction = 0.02
 minsector = 1
 
 # highest TESS sector to search for data
-maxsector = 45
+maxsector = 50
 
 # minimum number of planets to search for with the TLS
 Nplanets_min = 3

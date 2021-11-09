@@ -1,7 +1,7 @@
 import numpy as np
 import pylab as plt
 import batman, misc, os, pdb
-from scipy.state import gamma
+from scipy.stats import gamma
 from scipy.optimize import curve_fit
 from tls_object import *
 import constants as cs
@@ -9,7 +9,7 @@ import transitleastsquares as tls
 import define_tls_grid as dtg
 
 
-def run_full_injection_recovery(tic, use_20sec=False):
+def run_full_injection_recovery(tic, use_20sec=False, N1=500, N2=500):
     fname = '%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic)
     assert os.path.exists(fname)
     ts = loadpickle(fname)
@@ -18,7 +18,8 @@ def run_full_injection_recovery(tic, use_20sec=False):
     clean_injrec_lc(ts)
 
     # do injection-recovery
-    run_injection_recovery(ts)
+    kwargs = {'N1': int(N1), 'N2': int(N2), 'pltt': True}
+    run_injection_recovery(ts, **kwargs)
     
     # save results
     ts.pickleobject()
@@ -41,7 +42,7 @@ def clean_injrec_lc(ts):
         
 
 
-def run_injection_recovery(ts, N1=500, N2=500):
+def run_injection_recovery(ts, N1=500, N2=500, pltt=True):
     '''
     Sample planets from a grid, inject them into the cleaned light curve, and 
     attempt to recover them using the TLS.
@@ -53,31 +54,27 @@ def run_injection_recovery(ts, N1=500, N2=500):
     snr = estimate_snr(ts, P, Rp)
 
     # for every planet, run the TLS and flag planet as recovered or not
-    injrec_results = np.zeros((N1+N2,5))
+    injrec_results = np.zeros((N1,5))
     for i in range(N1):
         injrec_results[i,:4] = P[i], Rp[i], b[i], snr[i]
         # inject planet
         inject_custom_planet(ts, P[i], Rp[i], b=b[i], T0=T0[i])
         # run TLS
+        print('\nRunning injection-recovery (P=%.3f days, Rp=%.2f REarth, b=%.2f, S/N=%.1f)'%tuple(injrec_results[i,:4]))
         injrec_results[i,4] = int(run_tls_Nplanets(ts))
+        print('Is detected? = %s'%bool(injrec_results[i,4]))
 
     # compute sensitivity vs snr
     snr_grid = np.linspace(0,30,20)
     sens_grid = np.zeros(snr_grid.size-1)
     for i in range(snr_grid.size-1):
-        g = (snr >= snr_grid[i]) & (snr <= snr_grid[i+1])
+        g = (snr > snr_grid[i]) & (snr <= snr_grid[i+1])
         sens_grid[i] = injrec_results[g,4].sum()/g.sum() if g.sum() > 0 else np.nan
     
     # fit the sensitivity curve with a Gamma CDF
     popt,_ = curve_fit(_gammaCDF, snr_grid, sens_grid)
     snr_model = np.linspace(0,snr.max(),1000)
-    sens_model = _gammaCDF(snr_model, *popt)
-
-    
-    plt.plot(snrgrid, sensgrid, 'o')
-    plt.plot(snr_model, sens_model, '-')
-    plt.show()
-
+    sens_model = _gammaCDF(snr_model, *popt)       
     
     # resample planets where the S/N is not very close to zero or one
     N2 = int(N2)
@@ -86,21 +83,48 @@ def run_injection_recovery(ts, N1=500, N2=500):
     snr = estimate_snr(ts, P, Rp)
 
     # for every planet, run the TLS and flag planet as recovered or not
-    injrec_results = np.zeros((N2,5))
+    injrec_resultsv2 = np.zeros((N2,5))
     for i in range(N2):
-        injrec_results[N1+i,:4] = P[i], Rp[i], b[i], snr[i]
+        injrec_resultsv2[i,:4] = P[i], Rp[i], b[i], snr[i]
         # inject planet
         inject_custom_planet(ts, P[i], Rp[i], b=b[i], T0=T0[i])
         # run TLS
-        injrec_results[N1+i,4] = int(run_tls_Nplanets(ts))
+        print('\nRunning injection-recovery (P=%.3f days, Rp=%.2f REarth, b=%.2f, S/N=%.1f)'%tuple(injrec_resultsv2[i,:4]))
+        injrec_resultsv2[i,4] = int(run_tls_Nplanets(ts))
+        print('Is detected? = %s'%bool(injrec_resultsv2[i,4]))
+
+    # combine results
+    injrec_results = np.vstack([injrec_results, injrec_resultsv2])
+        
+    # recompute sensitivity vs snr
+    for i in range(snr_grid.size-1):
+        g = (injrec_results[:,3] > snr_grid[i]) & (injrec_results[:,3] <= snr_grid[i+1])
+        sens_grid[i] = injrec_results[g,4].sum()/g.sum() if g.sum() > 0 else np.nan
+    
+    # fit the sensitivity curve with a Gamma CDF
+    ts.injrec.snr_binned, ts.injrec.sens_binned = snr_grid, sens_grid
+    popt,_ = curve_fit(_gammaCDF, snr_grid, sens_grid)
+    ts.injrec.snr_model = np.linspace(0,snr.max(),1000)
+    ts.injrec.sens_model = _gammaCDF(snr_model, *popt)
 
     # save results
     ts.injrec.Ps, ts.injrec.Rps, ts.injrec.bs, ts.injrec.snrs, ts.injrec.recovered = injrec_results.T
+    
+    # save sens vs S/N plot
+    if pltt:
+        plt.figure(figsize=(8,4))
+        plt.step(ts.injrec.snr_binned, ts.injrec.sens_binned, 'k-', lw=3)
+        plt.plot(ts.injrec.snr_model, ts.injrec.sens_model, '-', lw=2)
+        plt.title('TIC %i'%ts.tic, fontsize=12)
+        plt.ylabel('CDF', fontsize=12)
+        plt.xlabel('S/N', fontsize=12)
+        plt.savefig('%s/MAST/TESS/TIC%i/sens_init.png'%(cs.repo_dir, ts.tic))
+        plt.close('all')
 
     
 
 
-def sample_planet_uniform(N=1e3):
+def sample_planets_uniform(N=1e3):
     N = int(N)
     P = 10**np.random.uniform(np.log10(cs.Pgrid[0]), np.log10(cs.Pgrid[1]), N)
     dT0 = np.random.uniform(0, P, N)
@@ -110,7 +134,7 @@ def sample_planet_uniform(N=1e3):
         
 
 
-def sample_planet_weighted(ts, popt, N=1e3, border=0.02):
+def sample_planets_weighted(ts, popt, N=1e3, border=0.02):
     assert 0 <= border <= 1
 
     N = int(N)
@@ -257,3 +281,4 @@ def is_planet_detected(Pinj, Psrec, rtol=.05):
         is_detected += np.any(np.isclose(Ppeaks, p, rtol=rtol))
         
     return is_detected
+
