@@ -16,12 +16,12 @@ minsector = 1
 maxsector = 50
 
 # minimum number of planets to search for with the TLS
-Nplanets_min = 3
+Nplanets_max = 3
 
 # stop the TLS search when the max SDE value is less than this value
-SDEthreshold = 5
+SDEthreshold = 6
 
 # define grid for injection-recovery
 Pgrid = .5, 30
 Rpgrid = .5, 4
-bgrid = 0, 1
+bgrid = 0, .9

@@ -4,7 +4,9 @@
 *notes*
 *.zip
 derive_SNR*
+compile_PCs.py
 /MAST
+/TOIs
 /Input
 /__pycache__
 /.ipynb_checkpoints
@@ -14,3 +16,4 @@ Untitled*
 main*py
 *tmp*
 *test*
+PCspreadsheet.txt

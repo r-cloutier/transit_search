@@ -51,7 +51,7 @@ def run_injection_recovery(ts, N1=500, N2=500, pltt=True):
     N1 = int(N1)
     P, dT0, Rp, b = sample_planets_uniform(N1)
     T0 = ts.lc.bjd[0] + dT0
-    snr = estimate_snr(ts, P, Rp)
+    snr = misc.estimate_snr(ts, P, Rp)
 
     # for every planet, run the TLS and flag planet as recovered or not
     injrec_results = np.zeros((N1,5))
@@ -72,7 +72,8 @@ def run_injection_recovery(ts, N1=500, N2=500, pltt=True):
         sens_grid[i] = injrec_results[g,4].sum()/g.sum() if g.sum() > 0 else np.nan
     
     # fit the sensitivity curve with a Gamma CDF
-    popt,_ = curve_fit(_gammaCDF, snr_grid, sens_grid)
+    g = np.isfinite(sens_grid)
+    popt,_ = curve_fit(_gammaCDF, snr_grid[g], sens_grid[g])
     snr_model = np.linspace(0,snr.max(),1000)
     sens_model = _gammaCDF(snr_model, *popt)       
     
@@ -80,7 +81,7 @@ def run_injection_recovery(ts, N1=500, N2=500, pltt=True):
     N2 = int(N2)
     P, dT0, Rp, b = sample_planets_weighted(ts, popt, N=N2)
     T0 = ts.lc.bjd[0] + dT0
-    snr = estimate_snr(ts, P, Rp)
+    snr = misc.estimate_snr(ts, P, Rp)
 
     # for every planet, run the TLS and flag planet as recovered or not
     injrec_resultsv2 = np.zeros((N2,5))
@@ -103,9 +104,10 @@ def run_injection_recovery(ts, N1=500, N2=500, pltt=True):
     
     # fit the sensitivity curve with a Gamma CDF
     ts.injrec.snr_binned, ts.injrec.sens_binned = snr_grid, sens_grid
-    popt,_ = curve_fit(_gammaCDF, snr_grid, sens_grid)
+    g = np.isfinite(sens_grid)
+    ts.injrec.popt,_ = curve_fit(_gammaCDF, snr_grid[g], sens_grid[g])
     ts.injrec.snr_model = np.linspace(0,snr.max(),1000)
-    ts.injrec.sens_model = _gammaCDF(snr_model, *popt)
+    ts.injrec.sens_model = _gammaCDF(snr_model, *ts.injrec.popt)
 
     # save results
     ts.injrec.Ps, ts.injrec.Rps, ts.injrec.bs, ts.injrec.snrs, ts.injrec.recovered = injrec_results.T
@@ -146,7 +148,7 @@ def sample_planets_weighted(ts, popt, N=1e3, border=0.02):
         b = np.random.uniform(cs.bgrid[0], cs.bgrid[1], N)
         
         # get each planet's snr and corresponding sensitivity
-        snr = estimate_snr(ts, P, Rp)
+        snr = misc.estimate_snr(ts, P, Rp)
         sens = _gammaCDF(snr, *popt)
         accept = (sens > border) & (sens < 1-border)
         out = np.vstack([out, np.array([P,dT0,Rp,b]).T[accept]])
@@ -155,14 +157,6 @@ def sample_planets_weighted(ts, popt, N=1e3, border=0.02):
     P, dT0, Rp, b = out[:N].T
     return P, dT0, Rp, b
 
-
-
-def estimate_snr(ts, P, Rp):
-    Z = (misc.Rearth2m(Rp) / misc.Rsun2m(ts.star.Rs))**2
-    sig = np.median(ts.injrec.efnorm)
-    dT = 27 * np.max([len(s) for s in ts.lc.sect_ranges])
-    return Z/sig * np.sqrt(dT/P)
-    
 
 
 def _gammaCDF(snr, a, s):

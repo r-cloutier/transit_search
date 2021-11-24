@@ -86,7 +86,12 @@ def read_TESS_data(tic, minsector=1, maxsector=55, quality_cut=True,
         g = (qual_flags == 0) & (np.isfinite(fnorm)) & (np.isfinite(efnorm))
         bjd, fnorm, efnorm, sectors, qual_flags, texps = bjd[g], fnorm[g], efnorm[g], sectors[g], qual_flags[g], texps[g]
 
-    return bjd, fnorm, efnorm, sectors, qual_flags, texps
+     # get Tmag
+    star_info = Catalogs.query_object("TIC %i"%tic, catalog="TIC")
+    star_info = star_info[star_info['ID'] == tic]
+    Tmag, RA, Dec = star_info['Tmag'], star_info['RA_orig'], star_info['Dec_orig']
+
+    return bjd, fnorm, efnorm, sectors, qual_flags, texps, Tmag, RA, Dec
 
 
 

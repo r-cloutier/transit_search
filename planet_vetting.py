@@ -1,6 +1,10 @@
 import numpy as np
+import pylab as plt
+from scipy.interpolate import interp1d
 import pandas as pd
 import constants as cs
+from injectionrecovery import transit_model
+import misc, pdb
 
 
 def get_POIs(ts):
@@ -53,6 +57,11 @@ def get_POIs(ts):
 
 
 
+def vet_SDE(ts):
+    ts.vetting.vetting_mask *= ts.vetting.SDEOIs >= cs.SDEthreshold
+
+
+
 def vet_multiple_sectors(ts):
     '''
     If multiple sectors have been observed, vet planets that were not recovered
@@ -73,15 +82,63 @@ def vet_odd_even_difference(ts):
 
 
 
+def plot_light_curves(ts):
+    '''
+    For each vetted PC, plot the light curve to highlight the transits.
+    '''
+    mask = ts.vetting.vetting_mask
+    Np = mask.sum()
+
+    for i in range(Np):
+
+        # get matching transit model
+        for k in ts.tls.__dict__.keys():        
+            if np.isclose(ts.vetting.POIs[mask][i], getattr(ts.tls,k).period, rtol=cs.P_duplicate_fraction):
+
+                # plot light curve for each sector
+                plt.figure(figsize=(8,ts.lc.Nsect*4))
+                for j,s in enumerate(ts.lc.sect_ranges):
+                    
+                    g = np.in1d(ts.lc.sectors, s)
+                    slabel = '%i'%s[0] if len(s) == 1 else '%i-%i'%(min(s),max(s))
+                    phase = misc.foldAt(ts.lc.bjd[g], ts.vetting.POIs[mask][i], ts.vetting.T0OIs[mask][i])
+                    plt.plot(phase*ts.vetting.POIs[mask][i]*24, ts.lc.fdetrend[g], 'o', ms=1, alpha=.5, label='sector %s'%slabel)
+                    
+                    # plot transit model
+                    model_phase = misc.foldAt(getattr(ts.tls,k).model_folded_phase, 1, .5)
+                    fint = interp1d(model_phase, getattr(ts.tls,k).model_folded_model)
+                    plt.plot(phase*ts.vetting.POIs[mask][i]*24, fint(phase), '-')
+                    
+                    # customize
+                    if j == 0: plt.title('TIC %i'%ts.tic, fontsize=12)
+                    plt.xlabel('Time since mid-transit [hours]', fontsize=12)
+                    plt.ylabel('Normalized flux', fontsize=12)
+                    plt.xlim(())
+
+                # save figure
+                #plt.savefig('%s/MAST/TESS/TIC%i/transitmodel_planet%i.png'%(cs.repo_dir, ts.tic, i+1))
+                #plt.close('all')
+                plt.show()
+
+            # continue to the next planet
+            continue
+            
+
+
 def save_planet_parameters(ts):
-    outp = np.vstack([ts.vetting.POIs, ts.vetting.T0OIs, ts.vetting.DOIs,
+    N = ts.vetting.POIs.size
+    outp = np.vstack([np.repeat(ts.star.RA, N), np.repeat(ts.star.Dec, N),
+                      np.repeat(ts.star.Tmag, N), np.repeat(ts.star.Teff, N), 
+                      np.repeat(ts.star.Ms, N), np.repeat(ts.star.Rs, N),
+                      ts.vetting.POIs, ts.vetting.T0OIs, ts.vetting.DOIs,
                       ts.vetting.ZOIs, ts.vetting.rpRsOIs, ts.vetting.chi2minOIs,
                       ts.vetting.chi2redminOIs, ts.vetting.SDErawOIs,
                       ts.vetting.SDEOIs, ts.vetting.snrOIs,
                       ts.vetting.oddevendiff_sigma, ts.vetting.NoccurrencesOIs,
-                      ts.vetting.vetting_mask]).T
-    df = pd.DataFrame(outp, columns=['P','T0','duration_hrs','depth_ppt','rpRs',
+                      np.repeat(ts.lc.Nsect, N), ts.vetting.vetting_mask]).T
+    df = pd.DataFrame(outp, columns=['RA','Dec','Tmag','Teff','Ms','Rs',
+                                     'P','T0','duration_hrs','depth_ppt','rpRs',
                                      'chi2min','chi2redmin','SDEraw','SDE','snr',
-                                     'oddevendiff_sig','Noccurrences','vetted?'])
+                                     'oddevendiff_sig','Noccurrences','Nsectors','vetted?'])
     df = df.sort_values('SDE', ascending=False)
     df.to_csv('%s/MAST/TESS/TIC%i/planetparams.csv'%(cs.repo_dir, ts.tic), index=False)

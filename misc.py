@@ -63,3 +63,18 @@ def get_consecutive_sectors(sectors):
         group = list(map(int,group))
         ranges.append(group if len(group) == 1 else list(range(group[0],group[-1]+1)))
     return ranges
+
+
+
+def foldAt(t, P, T0=0):
+    phi = ((t-T0) % P) / P
+    phi[phi>.5] -= 1   # change range from [0,1] to [-0.5,0.5]
+    return phi
+
+
+def estimate_snr(ts, P, Rp):
+    Z = (Rearth2m(Rp) / Rsun2m(ts.star.Rs))**2
+    #sig = np.median(ts.injrec.efnorm)
+    sig = np.median(abs(ts.lc.fdetrend - np.median(ts.lc.fdetrend)))
+    dT = 27 * np.max([len(s) for s in ts.lc.sect_ranges])  # max consecutive sectors
+    return Z/sig * np.sqrt(dT/P)

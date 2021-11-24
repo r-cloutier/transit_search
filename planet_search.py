@@ -16,7 +16,7 @@ def run_full_planet_search(tic, use_20sec=False):
     Run each step of the transit search and save the results.
     '''
     kwargs = {'minsector': cs.minsector, 'maxsector': cs.maxsector,
-              'use_20sec': use_20sec, 'pltt': True}
+              'use_20sec': bool(use_20sec), 'pltt': True}
     ts = read_in_lightcurve(tic, **kwargs)
 
     try:
@@ -28,6 +28,7 @@ def run_full_planet_search(tic, use_20sec=False):
         ts.lc.GPused = False
 
     run_tls_Nplanets(ts)
+    ts.pickleobject()
     vet_planets(ts)
     ts.pickleobject()
     
@@ -39,6 +40,8 @@ def read_in_lightcurve(tic, minsector=1, maxsector=56, use_20sec=False, pltt=Tru
     '''
     Download and save available TESS light curves for a specified TIC source.
     '''
+    print('\nReading in light curve for TIC %i\n'%tic)
+
     # read in TESS LC
     kwargs = {'minsector': minsector,
               'maxsector': maxsector,
@@ -47,7 +50,8 @@ def read_in_lightcurve(tic, minsector=1, maxsector=56, use_20sec=False, pltt=Tru
 
     # save light curve
     ts = transit_search(tic, 'TESSLC_planetsearch')
-    ts.lc.bjd_raw, ts.lc.fnorm_raw, ts.lc.efnorm_raw, ts.lc.sectors_raw, ts.lc.qual_flags_raw, ts.lc.texps_raw = p
+    ts.lc.bjd_raw, ts.lc.fnorm_raw, ts.lc.efnorm_raw, ts.lc.sectors_raw, ts.lc.qual_flags_raw, ts.lc.texps_raw = p[:-3]
+    ts.star.Tmag, ts.star.RA, ts.star.Dec = p[-3:]
 
     # get sectors
     ts.lc.sect_ranges = misc.get_consecutive_sectors(np.unique(ts.lc.sectors_raw))
@@ -78,6 +82,8 @@ def detrend_lightcurve_median(ts, window_length_hrs=12, pltt=True):
     '''
     Detrend the light curve using a running median with a specified lengthscale.
     '''
+    print('\nMedian detrending light curve for TIC %i\n'%ts.tic)
+
     # detrend each sector individually and construct outlier mask
     kwargs = {'window_length_days': window_length_hrs/24}
     ts.lc.fdetrend_full, ts.lc.mask = mdt.detrend_all_sectors(ts.lc.bjd_raw, ts.lc.fnorm_raw, ts.lc.sectors_raw, **kwargs)
@@ -112,6 +118,8 @@ def detrend_lightcurve_GP(ts, pltt=True):
     '''
     Detrend the light curve using a GP with a SHO kernel.
     '''
+    print('\nGP detrending light curve for TIC %i\n'%ts.tic)
+
     # detrend each sector individually and construct outlier mask
     #kwargs = {'window_length_days': window_length_hrs/24}
     #ts.lc.fdetrend_full, ts.lc.mask = mdt.detrend_all_sectors(ts.lc.bjd_raw, ts.lc.fnorm_raw, ts.lc.sectors_raw, **kwargs)
@@ -151,7 +159,7 @@ def run_tls_Nplanets(ts, pltt=True):
     '''
     # get approximate stellar parameters
     p = tls.catalog_info(TIC_ID=ts.tic)
-    ts.star.ab, ts.star.Ms, ts.star.Ms_min, ts.star.Ms_max, ts.star.Rs, ts.star.Rs_min, ts.star.Rs_max = p
+    ts.star.ab, ts.star.Ms, ts.star.Ms_min, ts.star.Ms_max, ts.star.Rs, ts.star.Rs_min, ts.star.Rs_max, ts.star.Teff = p
 
     # plot Ntransits vs period
     _=dtg.get_Ntransit_vs_period(ts.tic, ts.lc.bjd, ts.lc.sectors)
@@ -165,12 +173,21 @@ def run_tls_Nplanets(ts, pltt=True):
         # get maximum period for 2 transits on average
         Pmax,_,_ = dtg.get_Ntransit_vs_period(ts.tic, ts.lc.bjd[g], ts.lc.sectors[g], pltt=False)
 
+        # run tls on this sector
         iter_count = 1
-        while (iter_count <= cs.Nplanets_min) or (np.any(results.power) >= cs.SDEthreshold):
+        results = _run_tls(*lc_input, ts.star.ab, period_max=float(Pmax))
+        results.snr = misc.estimate_snr(ts, results['period'], misc.m2Rearth(misc.Rsun2m(results['rp_rs'])))  # recompute SNR
+        setattr(ts.tls, 'results_%i_s%s'%(iter_count,slabel), results)
+
+        # mask out found signal
+        lc_input = _mask_transits(*lc_input, getattr(ts.tls, 'results_%i_s%s'%(iter_count,slabel)))
+
+        while (iter_count <= cs.Nplanets_max) and (np.any(results.power) >= cs.SDEthreshold):
 
             print('\nRunning TLS for planet %i (sector(s) %s)\n'%(iter_count,slabel))
             
             # run tls on this sector
+            iter_count += 1
             results = _run_tls(*lc_input, ts.star.ab, period_max=float(Pmax))
             setattr(ts.tls, 'results_%i_s%s'%(iter_count,slabel), results)
 
@@ -194,8 +211,6 @@ def run_tls_Nplanets(ts, pltt=True):
                 plt.savefig('%s/MAST/TESS/TIC%i/sde_s%s_run%i'%(cs.repo_dir,ts.tic,slabel,iter_count))
                 plt.close('all')
 
-            # update planet index
-            iter_count += 1
 
 
 
@@ -203,9 +218,12 @@ def vet_planets(ts):
     '''
     Given the TLS results, vet planets using various metrics. 
     '''
+    print('\nVetting planet candidates around TIC %i\n'%ts.tic)
     pv.get_POIs(ts)
+    pv.vet_SDE(ts)
     pv.vet_multiple_sectors(ts)
     pv.vet_odd_even_difference(ts)
+    #pv.plot_light_curves(ts)
     pv.save_planet_parameters(ts)
 
 
