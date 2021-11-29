@@ -1,6 +1,6 @@
 import numpy as np
 import pylab as plt
-import pdb, misc
+import pdb, misc, os
 import constants as cs
 from tls_object import transit_search, loadpickle
 import get_tess_data as gtd
@@ -11,10 +11,14 @@ import transitleastsquares as tls
 import planet_vetting as pv
 
 
-def run_full_planet_search(tic, use_20sec=False):
+def run_full_planet_search(tic, use_20sec=False, overwrite=False):
     '''
     Run each step of the transit search and save the results.
     '''
+    # skip if this TIC already has a completed planet search
+    if (is_already_done(tic)) & (overwrite == False):
+        return None
+
     kwargs = {'minsector': cs.minsector, 'maxsector': cs.maxsector,
               'use_20sec': bool(use_20sec), 'pltt': True}
     ts = read_in_lightcurve(tic, **kwargs)
@@ -31,9 +35,16 @@ def run_full_planet_search(tic, use_20sec=False):
     ts.pickleobject()
     vet_planets(ts)
     ts.pickleobject()
-    
+    ts.DONE = True   
+ 
     return ts
     
+
+
+def is_already_done(tic):
+    fname = '%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir, tic)
+    return loadpickle(fname).DONE if os.path.exists(fname) else False
+
 
 
 def read_in_lightcurve(tic, minsector=1, maxsector=56, use_20sec=False, pltt=True):
