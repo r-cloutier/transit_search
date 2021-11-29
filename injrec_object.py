@@ -13,6 +13,7 @@ class injection_recovery:
 
     def __init__(self, Tmagmin, Tmagmax, fname):
         self.Tmagmin, self.Tmagmax = float(Tmagmin), float(Tmagmax)
+        self.DONE = False
         dir_full = '%s/MAST/TESS'%cs.repo_dir
         assert os.path.exists(dir_full)
         self.fname_full = '%s/%s'%(dir_full, fname)

@@ -50,7 +50,8 @@ def run_full_injection_recovery(Tmagmin, Tmagmax, use_20sec=False, N1=500, N2=50
     run_injection_recovery(injrec, **kwargs)
     
     # save results
-    ts.pickleobject()
+    injrec.DONE
+    injrec.pickleobject()
     
 
 
