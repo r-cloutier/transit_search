@@ -39,7 +39,7 @@ def compile_Tmags():
 
 def run_full_injection_recovery(Tmagmin, Tmagmax, use_20sec=False, N1=500, N2=500):
     # group stars by Tmag (i.e. do inj-rec over Tmag bins)
-    injrec = injection_recovery(Tmagmin, Tmagmax, ('injrec_Tmag_%.2f_%.2f'%(Tmagmin, Tmagmax)).replace('.','d'))
+    injrec = _get_injrec_object(Tmagmin, Tmagmax)
     df = pd.read_csv(Tmagfname)
     g = (df['Tmag'] >= injrec.Tmagmin) & (df['Tmag'] <= injrec.Tmagmax)
     injrec.tics, injrec.Tmags = np.ascontiguousarray(df['TIC'][g]), np.ascontiguousarray(df['Tmag'][g])
@@ -52,7 +52,17 @@ def run_full_injection_recovery(Tmagmin, Tmagmax, use_20sec=False, N1=500, N2=50
     # save results
     injrec.DONE
     injrec.pickleobject()
-    
+   
+
+
+def _get_injrec_object(Tmagmin, Tmagmax):
+    fname = 'injrec_Tmag_%.2f_%.2f'%(Tmagmin, Tmagmax)).replace('.','d')
+    fname_full = '%s/MAST/TESS/%s'%(cs.repo_dir, fname)
+    if os.path.exists(fname_full):
+        injrec = loadpickle(fname_full)
+    else:
+        injrec = injection_recovery(Tmagmin, Tmagmax, fname)
+    return injrec 
 
 
 def bin_stars_Tmag(Tmagmin, Tmagmax, ticids):
@@ -81,6 +91,18 @@ def run_injection_recovery(injrec, N1=500, N2=500, pltt=True):
     attempt to recover them using the TLS. Only use light curves for stars that
     are given in the list argument tics.
     '''
+    # do it twice so we can save in between
+    if not injrec.DONE1:
+        _run_injection_recovery_iter1(injrec, N1=N1)
+        injrec.pickleobject()
+    if not injrec.DONE:
+        _run_injection_recovery_iter2(injrec, N2=N2, pltt=pltt)
+
+
+
+def _run_injection_recovery_iter1(injrec, N1=500):
+    injrec.DONE1, injrec.DONE = False, False
+
     # first, uniformly sample planets in the P-Rp parameter space
     N1 = int(N1)
     P, dT0, Rp, b = sample_planets_uniform(N1)
@@ -89,6 +111,9 @@ def run_injection_recovery(injrec, N1=500, N2=500, pltt=True):
     injrec_results = np.zeros((N1,5))
     T0, snr = np.zeros(N1), np.zeros(N1)
     for i in range(N1):
+
+        print('%.3f (first set)'%(i/N1))
+
         # get star
         tic = np.random.choice(injrec.tics)
         ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
@@ -103,7 +128,6 @@ def run_injection_recovery(injrec, N1=500, N2=500, pltt=True):
         # run TLS
         print('\nRunning injection-recovery (P=%.3f days, Rp=%.2f REarth, b=%.2f, S/N=%.1f)'%tuple(injrec_results[i,:4]))
         injrec_results[i,4] = int(run_tls_Nplanets(injrec, ts))
-        ##print('Is detected? = %s'%bool(injrec_results[i,4]))
 
     # compute sensitivity vs snr
     snr_grid_big = np.linspace(0,30,20)
@@ -118,13 +142,38 @@ def run_injection_recovery(injrec, N1=500, N2=500, pltt=True):
     popt,_ = curve_fit(_gammaCDF, snr_grid[g], sens_grid[g])
     snr_model = np.linspace(0,snr.max(),1000)
     sens_model = _gammaCDF(snr_model, *popt)       
-    
+   
+    # recompute sensitivity vs snr
+    for i in range(snr_grid.size):
+        g = (injrec_results[:,3] > snr_grid_big[i]) & (injrec_results[:,3] <= snr_grid_big[i+1])
+        sens_grid[i] = injrec_results[g,4].sum()/g.sum() if g.sum() > 0 else np.nan
+
+    # fit the sensitivity curve with a Gamma CDF
+    injrec.snr_binned, injrec.sens_binned = snr_grid, sens_grid
+    g = np.isfinite(sens_grid)
+    injrec.popt,_ = curve_fit(_gammaCDF, snr_grid[g], sens_grid[g])
+    injrec.snr_model = np.linspace(0,snr.max(),1000)
+    injrec.sens_model = _gammaCDF(snr_model, *injrec.popt)
+
+    # save results
+    injrec.injrec_results = injrec_results
+    injrec.DONE1 = True
+
+
+
+def _run_injection_recovery_iter2(injrec, N2=500, pltt=pltt):
+    assert injrec.DONE1
+    assert not injrec.DONE
+
     # for every planet, run the TLS and flag planet as recovered or not
     N2 = int(N2)
     injrec_resultsv2 = np.zeros((N2,5))
     P, Rp, b = np.zeros(N2), np.zeros(N2), np.zeros(N2)
     T0, snr = np.zeros(N2), np.zeros(N2)
     for i in range(N2):
+
+        print('%.3f (second set)'%(i/N2))
+
         # get star
         tic = np.random.choice(injrec.tics)
         ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
@@ -142,10 +191,9 @@ def run_injection_recovery(injrec, N1=500, N2=500, pltt=True):
         # run TLS
         print('\nRunning injection-recovery (P=%.3f days, Rp=%.2f REarth, b=%.2f, S/N=%.1f)'%tuple(injrec_resultsv2[i,:4]))
         injrec_resultsv2[i,4] = int(run_tls_Nplanets(injrec, ts))
-        #print('Is detected? = %s'%bool(injrec_resultsv2[i,4]))
 
     # combine results
-    injrec_results = np.vstack([injrec_results, injrec_resultsv2])
+    injrec_results = np.vstack([injrec.injrec_results, injrec_resultsv2])
     
     # recompute sensitivity vs snr
     for i in range(snr_grid.size):
@@ -161,7 +209,10 @@ def run_injection_recovery(injrec, N1=500, N2=500, pltt=True):
 
     # save results
     injrec.Ps, injrec.Rps, injrec.bs, injrec.snrs, injrec.recovered = injrec_results.T
-    
+    delattr(injrec, 'injrec_results')
+    delattr(injrec, 'DONE1')
+    injrec.DONE = True
+ 
     # save sens vs S/N plot
     if pltt:
         plt.figure(figsize=(8,4))
@@ -172,8 +223,6 @@ def run_injection_recovery(injrec, N1=500, N2=500, pltt=True):
         plt.xlabel('S/N', fontsize=12)
         plt.savefig('%s/MAST/TESS/TIC%i/sens_init.png'%(cs.repo_dir, ts.tic))
         plt.close('all')
-
-
 
 
 
@@ -301,8 +350,8 @@ def run_tls_Nplanets(injrec, ts, Nmax=3):
         results = _run_tls(*lc_input, ts.star.ab, period_max=float(Pmax))
 
         # get highest peaks in the TLS
-        s = np.argsort(ts.tls.results_1_s4['power'])[::-1]
-        Psrec = ts.tls.results_1_s4['periods'][s][:int(Nmax)]
+        s = np.argsort(results['power'])[::-1]
+        Psrec = results['periods'][s][:int(Nmax)]
         
         # check if the planet is recovered
         is_detected += is_planet_detected(injrec.argsinjected[0], Psrec)

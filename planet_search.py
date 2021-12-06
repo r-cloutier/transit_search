@@ -34,8 +34,8 @@ def run_full_planet_search(tic, use_20sec=False, overwrite=False):
     run_tls_Nplanets(ts)
     ts.pickleobject()
     vet_planets(ts)
+    ts.DONE = True
     ts.pickleobject()
-    ts.DONE = True   
  
     return ts
     
