@@ -56,7 +56,7 @@ def run_full_injection_recovery(Tmagmin, Tmagmax, use_20sec=False, N1=500, N2=50
 
 
 def _get_injrec_object(Tmagmin, Tmagmax):
-    fname = 'injrec_Tmag_%.2f_%.2f'%(Tmagmin, Tmagmax)).replace('.','d')
+    fname = ('injrec_Tmag_%.2f_%.2f'%(Tmagmin, Tmagmax)).replace('.','d')
     fname_full = '%s/MAST/TESS/%s'%(cs.repo_dir, fname)
     if os.path.exists(fname_full):
         injrec = loadpickle(fname_full)
@@ -161,7 +161,7 @@ def _run_injection_recovery_iter1(injrec, N1=500):
 
 
 
-def _run_injection_recovery_iter2(injrec, N2=500, pltt=pltt):
+def _run_injection_recovery_iter2(injrec, N2=500, pltt=True):
     assert injrec.DONE1
     assert not injrec.DONE
 

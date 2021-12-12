@@ -78,3 +78,13 @@ def estimate_snr(ts, P, Rp):
     sig = np.median(abs(ts.lc.fdetrend - np.median(ts.lc.fdetrend)))
     dT = 27 * np.max([len(s) for s in ts.lc.sect_ranges])  # max consecutive sectors
     return Z/sig * np.sqrt(dT/P)
+
+
+def bin_lc(x_fold, y, bin_width_min=60):
+    bins = np.arange(x_fold.min(), x_fold.max(), bin_width_min/1440)
+    denom, _ = np.histogram(x_fold, bins)
+    num, _ = np.histogram(x_fold, bins, weights=y)
+    denom[num == 0] = 1.0
+    xbin = 0.5 * (bins[1:] + bins[:-1])
+    ybin = num / denom
+    return xbin, ybin

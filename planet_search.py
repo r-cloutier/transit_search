@@ -3,6 +3,7 @@ import pylab as plt
 import pdb, misc, os
 import constants as cs
 from tls_object import transit_search, loadpickle
+from gls import Gls
 import get_tess_data as gtd
 import median_detrend as mdt
 import GPexoplanet as gpx
@@ -131,11 +132,16 @@ def detrend_lightcurve_GP(ts, pltt=True):
     '''
     print('\nGP detrending light curve for TIC %i\n'%ts.tic)
 
+    # check for rotation
+    get_Prot_from_GLS(ts)
+    assert np.isfinite(ts.star.Prot)
+
     # detrend each sector individually and construct outlier mask
     #kwargs = {'window_length_days': window_length_hrs/24}
     #ts.lc.fdetrend_full, ts.lc.mask = mdt.detrend_all_sectors(ts.lc.bjd_raw, ts.lc.fnorm_raw, ts.lc.sectors_raw, **kwargs)
-    ts.lc.fdetrend_full,ts.lc.mask,map_soln,extras = gpx.detrend_light_curve(ts.lc.bjd_raw, ts.lc.fnorm_raw, 
-                                                                             ts.lc.efnorm_raw, ts.lc.sectors_raw)
+    ts.lc.fdetrend_full,ts.lc.mask,ts.lc.map_soln,extras = gpx.detrend_light_curve(ts.lc.bjd_raw, ts.lc.fnorm_raw, 
+                                                                                   ts.lc.efnorm_raw, ts.lc.sectors_raw, 
+                                                                                   ts.star.Prot)
 
     # mask outliers
     p = np.vstack([ts.lc.bjd_raw,ts.lc.fnorm_raw,ts.lc.fdetrend_full,ts.lc.efnorm_raw,ts.lc.sectors_raw,ts.lc.qual_flags_raw]).T[ts.lc.mask].T
@@ -160,6 +166,32 @@ def detrend_lightcurve_GP(ts, pltt=True):
         plt.xlabel('BJD - 2,457,000', fontsize=12)
         plt.savefig('%s/MAST/TESS/TIC%i/detrendedLC.png'%(cs.repo_dir, ts.tic))
         plt.close('all')
+
+
+
+def get_Prot_from_GLS(ts, pltt=True):
+    '''
+    Compute the GLS periodogram of the binned light curve and look for prominent 
+    peaks to assess the presence of stellar rotation.
+    '''
+    # compute gls
+    x, y = misc.bin_lc(ts.lc.bjd_raw, ts.lc.fnorm_raw)
+    g = y != 0
+    gls = Gls((x[g], y[g], np.ones(g.sum())), fend=1/.5, fbeg=1/27)
+   
+    # check if there's a strong peak indicative of Prot
+    ts.star.Prot = 1/gls.freq[np.argmax(gls.power)] if gls.power.max() >= .4 else np.nan
+ 
+    # save gls plot
+    if pltt:
+        plt.figure(figsize=(8,4))
+        plt.plot(1/gls.freq, gls.power, 'k-', lw=.9, zorder=2)
+        plt.axvline(ts.star.Prot, ls='--', lw=2, zorder=1)
+        plt.xscale('log')
+        plt.title('Prot = %.3f days'%ts.star.Prot, fontsize=12)
+        plt.ylabel('GLS power', fontsize=12), plt.xlabel('Period [days]', fontsize=12)
+        plt.savefig('%s/MAST/TESS/TIC%i/gls.png'%(cs.repo_dir, ts.tic))
+        plt.close('all') 
 
 
 
@@ -260,4 +292,3 @@ def _mask_transits(bjd, fdetrend, efnorm, results):
     bjd_2 = bjd[~intransit]
     bjd_2, fdetrend_2, efnorm_2 = tls.cleaned_array(bjd_2, fdetrend_2, efnorm_2)
     return bjd_2, fdetrend_2, efnorm_2
-
