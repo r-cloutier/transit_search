@@ -47,7 +47,7 @@ def run_full_injection_recovery(Tmagmin, Tmagmax, use_20sec=False, N1=500, N2=50
 
     # do injection-recovery
     kwargs = {'N1': int(N1), 'N2': int(N2), 'pltt': True}
-    run_injection_recovery(injrec, **kwargs)
+    do_injection_recovery(injrec, **kwargs)
     
     # save results
     injrec.DONE
@@ -62,6 +62,7 @@ def _get_injrec_object(Tmagmin, Tmagmax):
         injrec = loadpickle(fname_full)
     else:
         injrec = injection_recovery(Tmagmin, Tmagmax, fname)
+        injrec.DONE1, injrec.DONE = False, False
     return injrec 
 
 
@@ -85,7 +86,7 @@ def bin_stars_Tmag(Tmagmin, Tmagmax, ticids):
         
 
 
-def run_injection_recovery(injrec, N1=500, N2=500, pltt=True):
+def do_injection_recovery(injrec, N1=500, N2=500, pltt=True):
     '''
     Sample planets from a grid, inject them into a cleaned light curve, and 
     attempt to recover them using the TLS. Only use light curves for stars that
@@ -101,8 +102,6 @@ def run_injection_recovery(injrec, N1=500, N2=500, pltt=True):
 
 
 def _run_injection_recovery_iter1(injrec, N1=500):
-    injrec.DONE1, injrec.DONE = False, False
-
     # first, uniformly sample planets in the P-Rp parameter space
     N1 = int(N1)
     P, dT0, Rp, b = sample_planets_uniform(N1)
@@ -210,7 +209,6 @@ def _run_injection_recovery_iter2(injrec, N2=500, pltt=True):
     # save results
     injrec.Ps, injrec.Rps, injrec.bs, injrec.snrs, injrec.recovered = injrec_results.T
     delattr(injrec, 'injrec_results')
-    delattr(injrec, 'DONE1')
     injrec.DONE = True
  
     # save sens vs S/N plot
@@ -221,7 +219,7 @@ def _run_injection_recovery_iter2(injrec, N2=500, pltt=True):
         plt.title('TIC %i'%ts.tic, fontsize=12)
         plt.ylabel('CDF', fontsize=12)
         plt.xlabel('S/N', fontsize=12)
-        plt.savefig('%s/MAST/TESS/TIC%i/sens_init.png'%(cs.repo_dir, ts.tic))
+        plt.savefig(('%s/MAST/TESS/senscurve_Tmag_%.2f_%.2f'%(cs.repo_dir, injrec.Tmagmin, injrec.Tmagmax)).replace('.','d')+'.png')
         plt.close('all')
 
 
