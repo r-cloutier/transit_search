@@ -103,6 +103,7 @@ def detrend_lightcurve_median(ts, window_length_hrs=12, pltt=True):
     # mask outliers
     p = np.vstack([ts.lc.bjd_raw,ts.lc.fnorm_raw,ts.lc.fdetrend_full,ts.lc.efnorm_raw,ts.lc.sectors_raw,ts.lc.qual_flags_raw]).T[ts.lc.mask].T
     ts.lc.bjd, ts.lc.fnorm, ts.lc.fdetrend, ts.lc.efnorm, ts.lc.sectors, ts.lc.qual_flags = p
+    ts.lc.efnorm_rescaled = np.zeros_like(ts.lc.efnorm) + np.std(ts.lc.fdetrend)
     ts.lc.detrend_model = ts.lc.fnorm / ts.lc.fdetrend
 
     # save LC plot
@@ -146,6 +147,7 @@ def detrend_lightcurve_GP(ts, pltt=True):
     # mask outliers
     p = np.vstack([ts.lc.bjd_raw,ts.lc.fnorm_raw,ts.lc.fdetrend_full,ts.lc.efnorm_raw,ts.lc.sectors_raw,ts.lc.qual_flags_raw]).T[ts.lc.mask].T
     ts.lc.bjd, ts.lc.fnorm, ts.lc.fdetrend, ts.lc.efnorm, ts.lc.sectors, ts.lc.qual_flags = p
+    ts.lc.efnorm_rescaled = np.zeros_like(ts.lc.efnorm) + np.std(ts.lc.fdetrend)
     ts.lc.detrend_model = ts.lc.fnorm / ts.lc.fdetrend
 
     # save LC plot
@@ -210,7 +212,7 @@ def run_tls_Nplanets(ts, pltt=True):
     for i,s in enumerate(ts.lc.sect_ranges):
         
         g = np.in1d(ts.lc.sectors, s)
-        lc_input = ts.lc.bjd[g], ts.lc.fdetrend[g], ts.lc.efnorm[g]
+        lc_input = ts.lc.bjd[g], ts.lc.fdetrend[g], ts.lc.efnorm_rescaled[g]
         slabel = '%i'%s[0] if len(s) == 1 else '%i-%i'%(min(s),max(s))
 
         # get maximum period for 2 transits on average

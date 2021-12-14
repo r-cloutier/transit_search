@@ -60,13 +60,9 @@ def build_model_0planets(x, y, Prot, mask=None, start=None):
     return model, map_soln, extras
 
 
-
 def _sigma_clip(fT, extras, sig=5):
-    sig = 5
-    mod = extras["gp_pred"]
-    resid = fT - mod
-    rms = np.sqrt(np.median(resid ** 2))
-    mask = np.abs(resid) < sig*rms
+    resid = fT - extras["gp_pred"]
+    mask = abs(resid - np.nanmedian(resid)) < sig*MAD(resid)
     return mask
 
 

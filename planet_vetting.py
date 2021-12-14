@@ -142,4 +142,4 @@ def save_planet_parameters(ts):
                                      'chi2min','chi2redmin','SDEraw','SDE','snr',
                                      'oddevendiff_sig','Noccurrences','Nsectors','vetted?'])
     df = df.sort_values('SDE', ascending=False)
-    df.to_csv('%s/MAST/TESS/TIC%i/planetparams.csv'%(cs.repo_dir, ts.tic), index=False)
+    df.to_csv('%s/MAST/TESS/TIC%i/planetparams_%i.csv'%(cs.repo_dir, ts.tic, ts.tic), index=False)

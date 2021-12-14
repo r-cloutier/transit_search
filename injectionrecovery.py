@@ -107,7 +107,7 @@ def _run_injection_recovery_iter1(injrec, N1=500):
     P, dT0, Rp, b = sample_planets_uniform(N1)
 
     # for every planet, run the TLS and flag planet as recovered or not
-    injrec_results = np.zeros((N1,5))
+    injrec_results = np.zeros((N1,6))
     T0, snr = np.zeros(N1), np.zeros(N1)
     for i in range(N1):
 
@@ -119,14 +119,14 @@ def _run_injection_recovery_iter1(injrec, N1=500):
         clean_injrec_lc(injrec, ts)
         T0[i] = ts.lc.bjd[0] + dT0[i]
         snr[i] = misc.estimate_snr(ts, P[i], Rp[i])
-        injrec_results[i,:4] = P[i], Rp[i], b[i], snr[i]
+        injrec_results[i,:5] = tic, P[i], Rp[i], b[i], snr[i]
 
         # inject planet
         inject_custom_planet(injrec, ts, P[i], Rp[i], b=b[i], T0=T0[i])
         
         # run TLS
-        print('\nRunning injection-recovery (P=%.3f days, Rp=%.2f REarth, b=%.2f, S/N=%.1f)'%tuple(injrec_results[i,:4]))
-        injrec_results[i,4] = int(run_tls_Nplanets(injrec, ts))
+        print('\nRunning injection-recovery on TIC %i (P=%.3f days, Rp=%.2f REarth, b=%.2f, S/N=%.1f)'%tuple(injrec_results[i,:5]))
+        injrec_results[i,5] = int(run_tls_Nplanets(injrec, ts))
 
     # compute sensitivity vs snr
     snr_grid_big = np.linspace(0,30,20)
@@ -134,7 +134,7 @@ def _run_injection_recovery_iter1(injrec, N1=500):
     sens_grid = np.zeros(snr_grid.size)
     for i in range(snr_grid.size):
         g = (snr > snr_grid_big[i]) & (snr <= snr_grid_big[i+1])
-        sens_grid[i] = injrec_results[g,4].sum()/g.sum() if g.sum() > 0 else np.nan
+        sens_grid[i] = injrec_results[g,5].sum()/g.sum() if g.sum() > 0 else np.nan
     
     # fit the sensitivity curve with a Gamma CDF
     g = np.isfinite(sens_grid)
@@ -144,8 +144,8 @@ def _run_injection_recovery_iter1(injrec, N1=500):
    
     # recompute sensitivity vs snr
     for i in range(snr_grid.size):
-        g = (injrec_results[:,3] > snr_grid_big[i]) & (injrec_results[:,3] <= snr_grid_big[i+1])
-        sens_grid[i] = injrec_results[g,4].sum()/g.sum() if g.sum() > 0 else np.nan
+        g = (injrec_results[:,4] > snr_grid_big[i]) & (injrec_results[:,4] <= snr_grid_big[i+1])
+        sens_grid[i] = injrec_results[g,5].sum()/g.sum() if g.sum() > 0 else np.nan
 
     # fit the sensitivity curve with a Gamma CDF
     injrec.snr_binned, injrec.sens_binned = snr_grid, sens_grid
@@ -166,7 +166,7 @@ def _run_injection_recovery_iter2(injrec, N2=500, pltt=True):
 
     # for every planet, run the TLS and flag planet as recovered or not
     N2 = int(N2)
-    injrec_resultsv2 = np.zeros((N2,5))
+    injrec_resultsv2 = np.zeros((N2,6))
     P, Rp, b = np.zeros(N2), np.zeros(N2), np.zeros(N2)
     T0, snr = np.zeros(N2), np.zeros(N2)
     for i in range(N2):
@@ -182,22 +182,22 @@ def _run_injection_recovery_iter2(injrec, N2=500, pltt=True):
         P[i], dT0, Rp[i], b[i] = sample_planets_weighted(ts, popt, N=1)
         T0[i] = ts.lc.bjd[0] + dT0[i]
         snr[i] = misc.estimate_snr(ts, P[i], Rp[i])
-        injrec_resultsv2[i,:4] = P[i], Rp[i], b[i], snr[i]
+        injrec_resultsv2[i,:5] = tic, P[i], Rp[i], b[i], snr[i]
 
         # inject planet
         inject_custom_planet(injrec, ts, P[i], Rp[i], b=b[i], T0=T0[i])
         
         # run TLS
-        print('\nRunning injection-recovery (P=%.3f days, Rp=%.2f REarth, b=%.2f, S/N=%.1f)'%tuple(injrec_resultsv2[i,:4]))
-        injrec_resultsv2[i,4] = int(run_tls_Nplanets(injrec, ts))
+        print('\nRunning injection-recovery on TIC %i (P=%.3f days, Rp=%.2f REarth, b=%.2f, S/N=%.1f)'%tuple(injrec_resultsv2[i,:5]))
+        injrec_resultsv2[i,5] = int(run_tls_Nplanets(injrec, ts))
 
     # combine results
     injrec_results = np.vstack([injrec.injrec_results, injrec_resultsv2])
     
     # recompute sensitivity vs snr
     for i in range(snr_grid.size):
-        g = (injrec_results[:,3] > snr_grid_big[i]) & (injrec_results[:,3] <= snr_grid_big[i+1])
-        sens_grid[i] = injrec_results[g,4].sum()/g.sum() if g.sum() > 0 else np.nan
+        g = (injrec_results[:,4] > snr_grid_big[i]) & (injrec_results[:,4] <= snr_grid_big[i+1])
+        sens_grid[i] = injrec_results[g,5].sum()/g.sum() if g.sum() > 0 else np.nan
     
     # fit the sensitivity curve with a Gamma CDF
     injrec.snr_binned, injrec.sens_binned = snr_grid, sens_grid
@@ -207,7 +207,7 @@ def _run_injection_recovery_iter2(injrec, N2=500, pltt=True):
     injrec.sens_model = _gammaCDF(snr_model, *injrec.popt)
 
     # save results
-    injrec.Ps, injrec.Rps, injrec.bs, injrec.snrs, injrec.recovered = injrec_results.T
+    injrec.tics_inj, injrec.Ps, injrec.Rps, injrec.bs, injrec.snrs, injrec.recovered = injrec_results.T
     delattr(injrec, 'injrec_results')
     injrec.DONE = True
  
@@ -265,6 +265,7 @@ def clean_injrec_lc(injrec, ts):
     injrec.bjd = np.copy(ts.lc.bjd)
     injrec.fclean = np.copy(ts.lc.fdetrend)
     injrec.efnorm = np.copy(ts.lc.efnorm)
+    injrec.efnorm_rescaled = np.copy(ts.lc.efnorm_rescaled)
     injrec.sectors = np.copy(ts.lc.sectors)
     injrec.sect_ranges = np.copy(ts.lc.sect_ranges)
 
@@ -335,7 +336,7 @@ def run_tls_Nplanets(injrec, ts, Nmax=3):
     for i,s in enumerate(ts.lc.sect_ranges):
         
         g = np.in1d(ts.lc.sectors, s)
-        lc_input = ts.lc.bjd[g], injrec.finjected[g], ts.lc.efnorm[g]
+        lc_input = ts.lc.bjd[g], injrec.finjected[g], ts.lc.efnorm_rescaled[g]
         slabel = '%i'%s[0] if len(s) == 1 else '%i-%i'%(min(s),max(s))
 
         # get maximum period for 2 transits on average

@@ -74,8 +74,8 @@ def foldAt(t, P, T0=0):
 
 def estimate_snr(ts, P, Rp):
     Z = (Rearth2m(Rp) / Rsun2m(ts.star.Rs))**2
-    #sig = np.median(ts.injrec.efnorm)
-    sig = np.median(abs(ts.lc.fdetrend - np.median(ts.lc.fdetrend)))
+    sig = np.median(ts.lc.efnorm_rescaled)
+    #sig = np.median(abs(ts.lc.fdetrend - np.median(ts.lc.fdetrend)))
     dT = 27 * np.max([len(s) for s in ts.lc.sect_ranges])  # max consecutive sectors
     return Z/sig * np.sqrt(dT/P)
 
