@@ -127,7 +127,7 @@ def plot_light_curves(ts):
 
 def save_planet_parameters(ts):
     N = ts.vetting.POIs.size
-    outp = np.vstack([np.repeat(ts.tic, N),
+    outp = np.vstack([np.repeat(ts.tic, N), np.repeat('-'.join(np.unique(ts.lc.sectors).astype(int).astype(str)),N),
                       np.repeat(ts.star.RA, N), np.repeat(ts.star.Dec, N),
                       np.repeat(ts.star.Tmag, N), np.repeat(ts.star.Teff, N), 
                       np.repeat(ts.star.Ms, N), np.repeat(ts.star.Rs, N),
@@ -137,7 +137,7 @@ def save_planet_parameters(ts):
                       ts.vetting.SDEOIs, ts.vetting.snrOIs,
                       ts.vetting.oddevendiff_sigma, ts.vetting.NoccurrencesOIs,
                       np.repeat(ts.lc.Nsect, N), ts.vetting.vetting_mask]).T
-    df = pd.DataFrame(outp, columns=['TIC','RA','Dec','Tmag','Teff','Ms','Rs',
+    df = pd.DataFrame(outp, columns=['TIC','sectors','RA','Dec','Tmag','Teff','Ms','Rs',
                                      'P','T0','duration_hrs','depth_ppt','rpRs',
                                      'chi2min','chi2redmin','SDEraw','SDE','snr',
                                      'oddevendiff_sig','Noccurrences','Nsectors','vetted?'])

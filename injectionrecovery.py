@@ -27,14 +27,17 @@ def compile_Tmags():
     for i,tic in enumerate(ticids):
         fname = '%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic)
         ts = loadpickle(fname)
+        if not ts.DONE:
+            continue
         ticsout[i] = ts.tic
         Tmags[i] = ts.star.Tmag
 
     # save
-    df = pd.DataFrame(np.vstack([ticsout, Tmags]).T, columns=['TIC','Tmag'])
+    g = ticsout > 0
+    df = pd.DataFrame(np.vstack([ticsout, Tmags]).T[g], columns=['TIC','Tmag'])
     df.to_csv(Tmagfname, index=False)    
 
-    return ticids, Tmags
+    return ticids[g], Tmags[g]
 
 
 def run_full_injection_recovery(Tmagmin, Tmagmax, use_20sec=False, N1=500, N2=500):
@@ -116,6 +119,9 @@ def _run_injection_recovery_iter1(injrec, N1=500):
         # get star
         tic = np.random.choice(injrec.tics)
         ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
+        while not hasattr(ts.lc, 'efnorm_rescaled'):
+            tic = np.random.choice(injrec.tics)
+            ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
         clean_injrec_lc(injrec, ts)
         T0[i] = ts.lc.bjd[0] + dT0[i]
         snr[i] = misc.estimate_snr(ts, P[i], Rp[i])
@@ -176,6 +182,9 @@ def _run_injection_recovery_iter2(injrec, N2=500, pltt=True):
         # get star
         tic = np.random.choice(injrec.tics)
         ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
+        while not hasattr(ts.lc, 'efnorm_rescaled'):
+            tic = np.random.choice(injrec.tics)
+            ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
         clean_injrec_lc(injrec, ts)
 
         # resample planets where the S/N is not very close to zero or one

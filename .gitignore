@@ -1,10 +1,12 @@
 #*
+/.*
 *~
 *pyc
 *notes*
 *.zip
 derive_SNR*
 compile_PCs.py
+/n
 /MAST
 /TOIs
 /Input
@@ -12,9 +14,10 @@ compile_PCs.py
 /.ipynb_checkpoints
 /plots
 /Output
+/srmp
 Untitled*
 main*py
 gls.py
 *tmp*
 *test*
-PCspreadsheet.txt
+PCspreadsheet*.txt
