@@ -334,19 +334,12 @@ def run_tls_Nplanets(injrec, ts, Nmax=3):
     Run the Transit-Least-Squares search for multiple signals on an input 
     (detrended) light curve.
     '''
-    # get approximate stellar parameters
-    p = tls.catalog_info(TIC_ID=ts.tic)
-    ts.star.ab, ts.star.Ms, ts.star.Ms_min, ts.star.Ms_max, ts.star.Rs, ts.star.Rs_min, ts.star.Rs_max, ts.star.Teff = p
-
-    # plot Ntransits vs period
-    _=dtg.get_Ntransit_vs_period(ts.tic, ts.lc.bjd, ts.lc.sectors)
-
     is_detected = False
-    for i,s in enumerate(ts.lc.sect_ranges):
+    for i,sect in enumerate(ts.lc.sect_ranges):
         
-        g = np.in1d(ts.lc.sectors, s)
+        g = np.in1d(ts.lc.sectors, sect)
         lc_input = ts.lc.bjd[g], injrec.finjected[g], ts.lc.efnorm_rescaled[g]
-        slabel = '%i'%s[0] if len(s) == 1 else '%i-%i'%(min(s),max(s))
+        slabel = '%i'%sect[0] if len(sect) == 1 else '%i-%i'%(min(sect),max(sect))
 
         # get maximum period for 2 transits on average
         Pmax,_,_ = dtg.get_Ntransit_vs_period(ts.tic, ts.lc.bjd[g], ts.lc.sectors[g], pltt=False)
@@ -358,8 +351,9 @@ def run_tls_Nplanets(injrec, ts, Nmax=3):
         results = _run_tls(*lc_input, ts.star.ab, period_max=float(Pmax))
 
         # get highest peaks in the TLS
-        s = np.argsort(results['power'])[::-1]
-        Psrec = results['periods'][s][:int(Nmax)]
+        g = results['power'] >= cs.SDEthreshold
+        s = np.argsort(results['power'][g])[::-1]
+        Psrec = results['periods'][g][s][:int(Nmax)]
         
         # check if the planet is recovered
         is_detected += is_planet_detected(injrec.argsinjected[0], Psrec)
@@ -375,21 +369,22 @@ def run_tls_Nplanets(injrec, ts, Nmax=3):
 def _run_tls(bjd, fdetrend, efnorm, ab, period_max=0):
     model = tls.transitleastsquares(bjd, fdetrend, efnorm)
     if period_max > 0:
-        results = model.power(u=ab, period_max=period_max)
+        results = model.power(u=ab, period_max=float(period_max),
+                              period_min=np.min(cs.Pgrid))
     else:
-        results = model.power(u=ab)
+        results = model.power(u=ab, period_min=np.min(cs.Pgrid))
     return results
 
 
 
-def is_planet_detected(Pinj, Psrec, rtol=.05):
+def is_planet_detected(Pinj, Psrec, rtol=.02):
     '''
     Given the period of the injected planet, check if any of the top peaks 
     in the TLS are close to the injected period.
     '''    
     # get possible peaks to check
     Ppeaks = []
-    for j in range(2,10):
+    for j in range(1,5):
         Ppeaks.append(Pinj*j)
         Ppeaks.append(Pinj/j)
     Ppeaks = np.sort(Ppeaks)
