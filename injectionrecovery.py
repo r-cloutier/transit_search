@@ -53,12 +53,16 @@ def run_full_injection_recovery(Tmagmin, Tmagmax, use_20sec=False, N1=500, N2=50
     do_injection_recovery(injrec, **kwargs)
     
     # save results
-    injrec.DONE
+    assert injrec.DONE
     injrec.pickleobject()
    
 
 
 def _get_injrec_object(Tmagmin, Tmagmax):
+    '''
+    Open an existing injrec object for this Tmag range if it exists. 
+    Otherwise, create a new one and start from scratch.
+    '''
     fname = ('injrec_Tmag_%.2f_%.2f'%(Tmagmin, Tmagmax)).replace('.','d')
     fname_full = '%s/MAST/TESS/%s'%(cs.repo_dir, fname)
     if os.path.exists(fname_full):
@@ -188,7 +192,7 @@ def _run_injection_recovery_iter2(injrec, N2=500, pltt=True):
         clean_injrec_lc(injrec, ts)
 
         # resample planets where the S/N is not very close to zero or one
-        P[i], dT0, Rp[i], b[i] = sample_planets_weighted(ts, popt, N=1)
+        P[i], dT0, Rp[i], b[i] = sample_planets_weighted(ts, injrec.popt, N=1)
         T0[i] = ts.lc.bjd[0] + dT0[i]
         snr[i] = misc.estimate_snr(ts, P[i], Rp[i])
         injrec_resultsv2[i,:5] = tic, P[i], Rp[i], b[i], snr[i]
@@ -395,3 +399,4 @@ def is_planet_detected(Pinj, Psrec, rtol=.02):
         is_detected += np.any(np.isclose(Ppeaks, p, rtol=rtol))
         
     return is_detected
+

@@ -205,6 +205,20 @@ def run_tls_Nplanets(ts, pltt=True):
     # get approximate stellar parameters
     p = tls.catalog_info(TIC_ID=ts.tic)
     ts.star.ab, ts.star.Ms, ts.star.Ms_min, ts.star.Ms_max, ts.star.Rs, ts.star.Rs_min, ts.star.Rs_max, ts.star.Teff = p
+    ts.star.reliable_Ms, ts.star.reliable_Rs, ts.star.reliable_Teff = np.repeat(True,3)
+
+    # check that the stellar parameters are known, otherwise add a placeholder
+    if np.any(np.isnan([ts.star.Ms, ts.star.Ms_max, ts.star.Ms_min])):
+        ts.star.reliable_Ms = False
+        ts.star.Ms, ts.star.Ms_max, ts.star.Ms_min = .3, .03, .03
+
+    if np.any(np.isnan([ts.star.Rs, ts.star.Rs_max, ts.star.Rs_min])):
+        ts.star.reliable_Rs = False
+        ts.star.Rs, ts.star.Rs_max, ts.star.Rs_min = .3, .03, .03
+
+    if np.isnan(ts.star.Teff):
+        ts.star.reliable_Teff = False
+        ts.star.Teff = 3300
 
     # plot Ntransits vs period
     _=dtg.get_Ntransit_vs_period(ts.tic, ts.lc.bjd, ts.lc.sectors)
