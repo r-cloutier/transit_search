@@ -235,7 +235,7 @@ def run_tls_Nplanets(ts, pltt=True):
         # run tls on this sector
         iter_count = 1
         results = _run_tls(*lc_input, ts.star.ab, period_max=float(Pmax))
-        results.snr = misc.estimate_snr(ts, results['period'], misc.m2Rearth(misc.Rsun2m(results['rp_rs'])))  # recompute SNR
+        results.snr = misc.estimate_snr(ts, results['period'], results['T0'], isc.m2Rearth(misc.Rsun2m(results['rp_rs'])))  # recompute SNR
         setattr(ts.tls, 'results_%i_s%s'%(iter_count,slabel), results)
 
         # mask out found signal
