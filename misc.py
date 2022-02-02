@@ -81,7 +81,7 @@ def estimate_snr_deprecated(ts, P, Rp):
 
 
 def estimate_snr(ts, P, T0, Rp): 
-    Z = (rvs.Rearth2m(Rp) / rvs.Rsun2m(ts.star.Rs))**2 
+    Z = (Rearth2m(Rp) / Rsun2m(ts.star.Rs))**2 
     sig = np.median(ts.lc.efnorm_rescaled) 
     transit_times = [T0+n*P for n in np.arange(np.floor((ts.lc.bjd.min()-T0)/P), np.ceil((ts.lc.bjd.max()-T0)/P)+1)]  
     Ntransits = np.sum([np.any(np.isclose(ts.lc.bjd-t, 0, atol=2/(60*24))) for t in transit_times]) 
