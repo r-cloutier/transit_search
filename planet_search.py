@@ -282,6 +282,7 @@ def vet_planets(ts):
     pv.vet_SDE(ts)
     pv.vet_multiple_sectors(ts)
     pv.vet_odd_even_difference(ts)
+    pv.vet_Prot(ts)
     #pv.plot_light_curves(ts)
     pv.save_planet_parameters(ts)
 
@@ -291,9 +292,10 @@ def vet_planets(ts):
 def _run_tls(bjd, fdetrend, efnorm, ab, period_max=0):
     model = tls.transitleastsquares(bjd, fdetrend, efnorm)
     if period_max > 0: 
-        results = model.power(u=ab, period_max=period_max)
+        results = model.power(u=ab, period_max=period_max, 
+                              period_min=np.min(cs.Pgrid))
     else:
-        results = model.power(u=ab)
+        results = model.power(u=ab, period_min=np.min(cs.Pgrid[0]))
     return results
 
 

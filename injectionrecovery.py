@@ -383,6 +383,7 @@ def run_tls_Nplanets(injrec, ts, Nmax=3, rtol=0.02):
     for i,sect in enumerate(ts.lc.sect_ranges):
         
         g = np.in1d(ts.lc.sectors, sect)
+        lc_input_raw = ts.lc.bjd[g], ts.lc.fdetrend[g], ts.lc.efnorm_rescaled[g]
         lc_input = ts.lc.bjd[g], injrec.finjected[g], ts.lc.efnorm_rescaled[g]
         slabel = '%i'%sect[0] if len(sect) == 1 else '%i-%i'%(min(sect),max(sect))
 
@@ -392,8 +393,14 @@ def run_tls_Nplanets(injrec, ts, Nmax=3, rtol=0.02):
         # run the tls and search for the injected signal
         print('\nRunning TLS for injection-recovery (sector(s) %s)\n'%(slabel))
             
-        # run tls on this sector
+        # run tls on this sector for light curves with and without the injected planet (i.e. null)
+        results_raw = _run_tls(*lc_input_raw, ts.star.ab, period_max=float(Pmax))
         results = _run_tls(*lc_input, ts.star.ab, period_max=float(Pmax))
+
+        # get highest peaks in the TLS of the null light curve
+        g = results_raw['power'] >= 0  # TEMP??
+        s = np.argsort(results_raw['power'][g])[::-1]
+        Psrec_raw = results_raw['periods'][g][s][:int(Nmax)]
 
         # get highest peaks in the TLS
         ##g = results['power'] >= cs.SDEthreshold
@@ -402,11 +409,11 @@ def run_tls_Nplanets(injrec, ts, Nmax=3, rtol=0.02):
         Psrec = results['periods'][g][s][:int(Nmax)]
  
         # check if the planet is recovered
-        is_detected += is_planet_detected(injrec.argsinjected[0], Psrec, rtol=rtol)
+        is_detected += is_planet_detected(ts, injrec.argsinjected[0], Psrec, Psrec_raw, rtol=rtol)
 
-        # get SDE of the injected period
+        # get SDE of the injected period (if P > Pmax then there's no SDE value)
         g = np.isclose(results['periods'], injrec.argsinjected[0], rtol=rtol)
-        sde = np.nanmax(results['power'][g])
+        sde = np.nanmax(results['power'][g]) if g.sum() > 0 else np.nan
 
         # stop searching if the planet is found
         if is_detected:
@@ -427,7 +434,7 @@ def _run_tls(bjd, fdetrend, efnorm, ab, period_max=0):
 
 
 
-def is_planet_detected(Pinj, Psrec, rtol=.02):
+def is_planet_detected(ts, Pinj, Psrec, Psrec_raw, rtol=.02):
     '''
     Given the period of the injected planet, check if any of the top peaks 
     in the TLS are close to the injected period.
@@ -439,9 +446,15 @@ def is_planet_detected(Pinj, Psrec, rtol=.02):
         Ppeaks.append(Pinj/j)
     Ppeaks = np.sort(Ppeaks)
 
-    # check if there is a peak in the TLS
+    # get rotation periods and harmonics to reject
+    Prots = []
+    for j in range(1,4):
+        Prots.append(ts.star.Prot/j)
+    Prots = np.sort(Prots)
+
+    # check if there is a peak in the TLS that is not close to rotation
     is_detected = False
     for p in Psrec:
-        is_detected += np.any(np.isclose(Ppeaks, p, rtol=rtol))
+        is_detected += np.any((np.isclose(Ppeaks, p, rtol=rtol))) & np.all(np.invert(np.isclose(Prots, p, rtol=rtol))) & np.all(np.invert(np.isclose(Psrec_raw, p, rtol=rtol)))
 
     return is_detected

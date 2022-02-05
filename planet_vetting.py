@@ -81,6 +81,21 @@ def vet_odd_even_difference(ts):
     ts.vetting.vetting_mask *= ts.vetting.oddevendiff_sigma < 3
 
 
+def vet_Prot(ts, rtol=0.02):
+    '''
+    Check that the planet candidate is not close to Prot or a harmonic.
+    '''
+    # get rotation periods and harmonics to reject
+    Prots = []
+    for j in range(1,4):
+        Prots.append(ts.star.Prot/j)
+    Prots = np.sort(Prots)
+
+    # check each POI
+    for i,p in enumerate(ts.vetting.POIs):
+        ts.vetting.vetting_mask[i] *= np.all(np.invert(np.isclose(Prots, p, rtol=rtol)))
+
+
 
 def plot_light_curves(ts):
     '''
