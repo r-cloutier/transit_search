@@ -347,7 +347,8 @@ def inject_custom_planet(injrec, ts, P, RpRearth, b=0, ecc=0, T0=np.nan, seed=np
     omegadeg = float(np.random.uniform(0,360))
     args = ts.lc.bjd, ts.star.Ms, ts.star.Rs, P, float(T0), RpRearth, b, ecc, omegadeg, ts.star.ab
     injrec.injected_model = transit_model(*args)
-    injrec.argsinjected = np.copy(args[3:-1])
+    snr = misc.estimate_snr(ts, P, float(T0), RpRearth)
+    injrec.argsinjected = np.append(np.copy(args[3:-1]), snr)
 
     # inject transiting planet
     injrec.finjected = injrec.fclean * injrec.injected_model
@@ -407,9 +408,9 @@ def run_tls_Nplanets(injrec, ts, Nmax=3, rtol=0.02):
         g = results['power'] >= 0  # TEMP??
         s = np.argsort(results['power'][g])[::-1]
         Psrec = results['periods'][g][s][:int(Nmax)]
- 
+
         # check if the planet is recovered
-        is_detected += is_planet_detected(ts, injrec.argsinjected[0], Psrec, Psrec_raw, rtol=rtol)
+        is_detected += is_planet_detected(ts, injrec.argsinjected[0], injrec.argsinjected[-1], Psrec, Psrec_raw, rtol=rtol)
 
         # get SDE of the injected period (if P > Pmax then there's no SDE value)
         g = np.isclose(results['periods'], injrec.argsinjected[0], rtol=rtol)
@@ -434,7 +435,7 @@ def _run_tls(bjd, fdetrend, efnorm, ab, period_max=0):
 
 
 
-def is_planet_detected(ts, Pinj, Psrec, Psrec_raw, rtol=.02):
+def is_planet_detected(ts, Pinj, snrinj, Psrec, Psrec_raw, rtol=.02):
     '''
     Given the period of the injected planet, check if any of the top peaks 
     in the TLS are close to the injected period.
@@ -455,6 +456,6 @@ def is_planet_detected(ts, Pinj, Psrec, Psrec_raw, rtol=.02):
     # check if there is a peak in the TLS that is not close to rotation
     is_detected = False
     for p in Psrec:
-        is_detected += np.any((np.isclose(Ppeaks, p, rtol=rtol))) & np.all(np.invert(np.isclose(Prots, p, rtol=rtol))) & np.all(np.invert(np.isclose(Psrec_raw, p, rtol=rtol)))
+        is_detected += np.any((np.isclose(Ppeaks, p, rtol=rtol))) & np.all(np.invert(np.isclose(Prots, p, rtol=rtol))) & np.all(np.invert(np.isclose(Psrec_raw, p, rtol=rtol))) & (snrinj >= 1)
 
     return is_detected

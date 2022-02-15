@@ -32,17 +32,17 @@ def get_POIs(ts):
     POIsv2 = np.zeros((0,12))
     for p in POIsv1[:,0]:
         duplicates = np.isclose(POIsv1[:,0], p, rtol=cs.P_duplicate_fraction)
-        avgP = np.average(POIsv1[duplicates,0], weights=POIsv1[duplicates,1])
-        avgT0 = np.average(POIsv1[duplicates,1], weights=POIsv1[duplicates,1])
-        avgD = np.average(POIsv1[duplicates,2], weights=POIsv1[duplicates,1])
-        avgZ = np.average(POIsv1[duplicates,3], weights=POIsv1[duplicates,1])
-        avgrpRs = np.average(POIsv1[duplicates,4], weights=POIsv1[duplicates,1])
-        avgchi2min = np.average(POIsv1[duplicates,5], weights=POIsv1[duplicates,1])
-        avgchi2redmin = np.average(POIsv1[duplicates,6], weights=POIsv1[duplicates,1])
-        avgSDEraw = np.average(POIsv1[duplicates,7], weights=POIsv1[duplicates,1])
-        avgSDE = np.average(POIsv1[duplicates,8], weights=POIsv1[duplicates,1])
-        avgsnr = np.average(POIsv1[duplicates,9], weights=POIsv1[duplicates,1])
-        avgOED = np.average(POIsv1[duplicates,10], weights=POIsv1[duplicates,1])
+        avgP = np.average(POIsv1[duplicates,0], weights=POIsv1[duplicates,8])
+        avgT0 = POIsv1[duplicates,1][0]   # cannot average T0s from multiple sectors
+        avgD = np.average(POIsv1[duplicates,2], weights=POIsv1[duplicates,8])
+        avgZ = np.average(POIsv1[duplicates,3], weights=POIsv1[duplicates,8])
+        avgrpRs = np.average(POIsv1[duplicates,4], weights=POIsv1[duplicates,8])
+        avgchi2min = np.average(POIsv1[duplicates,5], weights=POIsv1[duplicates,8])
+        avgchi2redmin = np.average(POIsv1[duplicates,6], weights=POIsv1[duplicates,8])
+        avgSDEraw = np.average(POIsv1[duplicates,7], weights=POIsv1[duplicates,8])
+        avgSDE = np.average(POIsv1[duplicates,8], weights=POIsv1[duplicates,8])
+        avgsnr = np.average(POIsv1[duplicates,9], weights=POIsv1[duplicates,8])
+        avgOED = np.average(POIsv1[duplicates,10], weights=POIsv1[duplicates,8])
         Nocc = np.sum(duplicates)
         POIsv2 = np.vstack([POIsv2, [avgP,avgT0,avgD,avgZ,avgrpRs,avgchi2min,avgchi2redmin,avgSDEraw,avgSDE,avgsnr,avgOED,Nocc]])
 
@@ -60,6 +60,9 @@ def get_POIs(ts):
 def vet_SDE(ts):
     ts.vetting.vetting_mask *= ts.vetting.SDEOIs >= cs.SDEthreshold
 
+
+def vet_snr(ts):
+    ts.vetting.vetting_mask *= ts.vetting.snrOIs >= 1
 
 
 def vet_multiple_sectors(ts):

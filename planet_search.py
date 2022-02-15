@@ -203,8 +203,9 @@ def run_tls_Nplanets(ts, pltt=True):
     (detrended) light curve.
     '''
     # get approximate stellar parameters
-    p = tls.catalog_info(TIC_ID=ts.tic)
-    ts.star.ab, ts.star.Ms, ts.star.Ms_min, ts.star.Ms_max, ts.star.Rs, ts.star.Rs_min, ts.star.Rs_max, ts.star.Teff = p
+    p = np.ascontiguousarray(tls.catalog_info(TIC_ID=ts.tic))
+    ts.star.ab = p[0]
+    ts.star.Ms, ts.star.Ms_min, ts.star.Ms_max, ts.star.Rs, ts.star.Rs_min, ts.star.Rs_max, ts.star.Teff = p[1:].astype(float)
     ts.star.reliable_Ms, ts.star.reliable_Rs, ts.star.reliable_Teff = np.repeat(True,3)
 
     # check that the stellar parameters are known, otherwise add a placeholder
@@ -235,7 +236,7 @@ def run_tls_Nplanets(ts, pltt=True):
         # run tls on this sector
         iter_count = 1
         results = _run_tls(*lc_input, ts.star.ab, period_max=float(Pmax))
-        results.snr = misc.estimate_snr(ts, results['period'], results['T0'], isc.m2Rearth(misc.Rsun2m(results['rp_rs'])))  # recompute SNR
+        results.snr = misc.estimate_snr(ts, results['period'], results['T0'], misc.m2Rearth(misc.Rsun2m(results['rp_rs']*ts.star.Rs))) if np.isfinite(results['period']) else np.nan
         setattr(ts.tls, 'results_%i_s%s'%(iter_count,slabel), results)
 
         # mask out found signal
@@ -280,6 +281,7 @@ def vet_planets(ts):
     print('\nVetting planet candidates around TIC %i\n'%ts.tic)
     pv.get_POIs(ts)
     pv.vet_SDE(ts)
+    pv.vet_snr(ts)
     pv.vet_multiple_sectors(ts)
     pv.vet_odd_even_difference(ts)
     pv.vet_Prot(ts)

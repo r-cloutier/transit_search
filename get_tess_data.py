@@ -7,9 +7,13 @@ import constants as cs
 
 
 def listFD(url, ext=''):
-    page = requests.get(url).text
-    soup = BeautifulSoup(page, 'html.parser')
-    return np.array([url + '/' + node.get('href') for node in soup.find_all('a') if node.get('href').endswith(ext)])
+    try:
+        page = requests.get(url).text
+        soup = BeautifulSoup(page, 'html.parser')
+        return np.array([url + '/' + node.get('href') for node in soup.find_all('a') if node.get('href').endswith(ext)])
+    except requests.exceptions.ConnectionError:
+        return np.array([]).astype(str)
+
 
 
 def read_TESS_data(tic, minsector=1, maxsector=55, quality_cut=True,
