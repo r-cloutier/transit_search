@@ -39,7 +39,7 @@ def compile_Tmags():
     return ticids[g], Tmags[g]
 
 
-def run_full_injection_recovery(Tmagmin, Tmagmax, use_20sec=False, N1=500, N2=500):
+def run_full_injection_recovery(Tmagmin, Tmagmax, use_20sec=False, overwrite=False, N1=500, N2=500):
     # group stars by Tmag (i.e. do inj-rec over Tmag bins)
     injrec = _get_injrec_object(Tmagmin, Tmagmax)
     df = pd.read_csv(Tmagfname)
@@ -48,7 +48,7 @@ def run_full_injection_recovery(Tmagmin, Tmagmax, use_20sec=False, N1=500, N2=50
     assert injrec.tics.size > 0
 
     # do injection-recovery
-    kwargs = {'N1': int(N1), 'N2': int(N2), 'pltt': True}
+    kwargs = {'N1': int(N1), 'N2': int(N2), 'pltt': True, 'overwrite': overwrite}
     do_injection_recovery(injrec, **kwargs)
     
     # save results
@@ -92,17 +92,17 @@ def bin_stars_Tmag(Tmagmin, Tmagmax, ticids):
         
 
 
-def do_injection_recovery(injrec, N1=500, N2=500, pltt=True):
+def do_injection_recovery(injrec, N1=500, N2=500, overwrite=True, pltt=True):
     '''
     Sample planets from a grid, inject them into a cleaned light curve, and 
     attempt to recover them using the TLS. Only use light curves for stars that
     are given in the list argument tics.
     '''
     # do it twice so we can save in between
-    if not injrec.DONE1:
+    if not injrec.DONE1 or overwrite:
         _run_injection_recovery_iter1(injrec, N1=N1)
         injrec.pickleobject()
-    if not injrec.DONE:
+    if not injrec.DONE or overwrite:
         _run_injection_recovery_iter2(injrec, N2=N2, pltt=pltt)
 
 
@@ -288,7 +288,7 @@ def sample_planets_uniform(N=1e3):
         
 
 
-def sample_planets_weighted(ts, popt, N=1e3, border=0.02):
+def sample_planets_weighted(ts, popt_snr, N=1e3, border=0.02):
     assert 0 <= border <= 1
 
     N = int(N)
@@ -301,7 +301,7 @@ def sample_planets_weighted(ts, popt, N=1e3, border=0.02):
         
         # get each planet's snr and corresponding sensitivity
         snr = misc.estimate_snr(ts, P, ts.lc.bjd[0]+dT0, Rp)
-        sens = _gammaCDF(snr, *popt)
+        sens = _gammaCDF(snr, *popt_snr)
         accept = (sens > border) & (sens < 1-border)
         out = np.vstack([out, np.array([P,dT0,Rp,b]).T[accept]])
         
@@ -410,7 +410,12 @@ def run_tls_Nplanets(injrec, ts, Nmax=3, rtol=0.02):
         Psrec = results['periods'][g][s][:int(Nmax)]
 
         # check if the planet is recovered
-        is_detected += is_planet_detected(ts, injrec.argsinjected[0], injrec.argsinjected[-1], Psrec, Psrec_raw, rtol=rtol)
+        sdeP = np.max(results['power'][np.isclose(results['periods'], injrec.argsinjected[0], rtol=.05)])
+        thetainj = injrec.argsinjected[0], injrec.argsinjected[-1], sdeP   # P,snr,sde
+        is_detected += is_planet_detected(ts, thetainj, Psrec, Psrec_raw, rtol=rtol)
+
+        detlabel = 'is' if is_detected else 'is not'
+        print('\nInjected planet %s detected around TIC %i (P=%.3f days, S/N=%.1f)'%(detlabel, ts.tic, thetainj[0], thetainj[1]))
 
         # get SDE of the injected period (if P > Pmax then there's no SDE value)
         g = np.isclose(results['periods'], injrec.argsinjected[0], rtol=rtol)
@@ -435,11 +440,13 @@ def _run_tls(bjd, fdetrend, efnorm, ab, period_max=0):
 
 
 
-def is_planet_detected(ts, Pinj, snrinj, Psrec, Psrec_raw, rtol=.02):
+def is_planet_detected(ts, thetainj, Psrec, Psrec_raw, rtol=.02):
     '''
     Given the period of the injected planet, check if any of the top peaks 
     in the TLS are close to the injected period.
     '''    
+    Pinj, snrinj, sdeinj = thetainj
+
     # get possible peaks to check
     Ppeaks = []
     for j in range(1,5):
@@ -456,6 +463,20 @@ def is_planet_detected(ts, Pinj, snrinj, Psrec, Psrec_raw, rtol=.02):
     # check if there is a peak in the TLS that is not close to rotation
     is_detected = False
     for p in Psrec:
-        is_detected += np.any((np.isclose(Ppeaks, p, rtol=rtol))) & np.all(np.invert(np.isclose(Prots, p, rtol=rtol))) & np.all(np.invert(np.isclose(Psrec_raw, p, rtol=rtol))) & (snrinj >= 1)
+        is_detected += np.any((np.isclose(Ppeaks, p, rtol=rtol))) & np.all(np.invert(np.isclose(Prots, p, rtol=rtol))) & np.all(np.invert(np.isclose(Psrec_raw, p, rtol=rtol))) & (snrinj >= 1) & (sdeinj >= cs.SDEthreshold) & (vet_Prot_injrec(ts, p))
 
     return is_detected
+
+
+def vet_Prot_injrec(ts, p, rtol=0.02):
+    '''
+    Check that the planet candidate is not close to Prot or a harmonic.
+    '''
+    # get rotation periods and harmonics to reject
+    Prots = []
+    for j in range(1,4):
+        Prots.append(ts.star.Prot/j)
+    Prots = np.sort(Prots)
+
+    # check each POI
+    return np.all(np.invert(np.isclose(Prots, p, rtol=rtol)))

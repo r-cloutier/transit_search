@@ -11,6 +11,9 @@ def get_POIs(ts):
     '''
     Given a set of tls result dictionaries (i.e. from multiple TLS runs and/or
     multiple sectors), consolidate periods of interest. 
+
+    Behaviour is slightly different betweent the planet search and vetting of 
+    injected planets.
     '''
     # collect all periods
     POIsv1 = np.zeros((0,11)) 
