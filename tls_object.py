@@ -20,6 +20,7 @@ class transit_search:
         # initialize inner classes
         self.lc = self.LC()
         self.star = self.STAR()
+        self.gls = self.GLS()
         self.tls = self.TLS()
         self.vetting = self.VETTING()
         self.injrec = self.INJREC()
@@ -33,6 +34,8 @@ class transit_search:
     class LC:
         pass
     class STAR:
+        pass
+    class GLS:
         pass
     class TLS:
         pass

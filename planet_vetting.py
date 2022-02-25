@@ -34,6 +34,8 @@ def get_POIs(ts):
     # identify duplicates
     POIsv2 = np.zeros((0,12))
     for p in POIsv1[:,0]:
+        if np.isnan(p):
+            continue
         duplicates = np.isclose(POIsv1[:,0], p, rtol=cs.P_duplicate_fraction)
         avgP = np.average(POIsv1[duplicates,0], weights=POIsv1[duplicates,8])
         avgT0 = POIsv1[duplicates,1][0]   # cannot average T0s from multiple sectors

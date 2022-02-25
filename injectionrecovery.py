@@ -410,12 +410,15 @@ def run_tls_Nplanets(injrec, ts, Nmax=3, rtol=0.02):
         Psrec = results['periods'][g][s][:int(Nmax)]
 
         # check if the planet is recovered
-        sdeP = np.max(results['power'][np.isclose(results['periods'], injrec.argsinjected[0], rtol=.05)])
-        thetainj = injrec.argsinjected[0], injrec.argsinjected[-1], sdeP   # P,snr,sde
-        is_detected += is_planet_detected(ts, thetainj, Psrec, Psrec_raw, rtol=rtol)
+        g = np.isclose(results['periods'], injrec.argsinjected[0], rtol=.05)
+        if g.sum() > 0:
+            thetainj = injrec.argsinjected[0], injrec.argsinjected[-1], np.max(results['power'][g])   # P,snr,sde
+            is_detected += is_planet_detected(ts, thetainj, Psrec, Psrec_raw, rtol=rtol)
+        else:
+            is_detected += False
 
         detlabel = 'is' if is_detected else 'is not'
-        print('\nInjected planet %s detected around TIC %i (P=%.3f days, S/N=%.1f)'%(detlabel, ts.tic, thetainj[0], thetainj[1]))
+        print('\nInjected planet %s detected around TIC %i (P=%.3f days, S/N=%.1f)'%(detlabel, ts.tic, injrec.argsinjected[0], injrec.argsinjected[-1]))
 
         # get SDE of the injected period (if P > Pmax then there's no SDE value)
         g = np.isclose(results['periods'], injrec.argsinjected[0], rtol=rtol)

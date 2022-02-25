@@ -28,7 +28,7 @@ def run_full_planet_search(tic, use_20sec=False, overwrite=False):
         detrend_lightcurve_GP(ts)
         ts.lc.GPused = True
     except:
-        kwargs = {'window_length_hrs': 24}    
+        kwargs = {'window_length_hrs': 12}
         detrend_lightcurve_median(ts, **kwargs)
         ts.lc.GPused = False
 
@@ -97,14 +97,13 @@ def detrend_lightcurve_median(ts, window_length_hrs=12, pltt=True):
     print('\nMedian detrending light curve for TIC %i\n'%ts.tic)
 
     # detrend each sector individually and construct outlier mask
-    kwargs = {'window_length_days': window_length_hrs/24}
-    ts.lc.fdetrend_full, ts.lc.mask = mdt.detrend_all_sectors(ts.lc.bjd_raw, ts.lc.fnorm_raw, ts.lc.sectors_raw, **kwargs)
+    kwargs = {'window_length_hrs': window_length_hrs}
+    ts.lc.fdetrend_full, ts.lc.detrend_model_full, ts.lc.mask = mdt.detrend_all_sectors(ts.lc.bjd_raw, ts.lc.fnorm_raw, ts.lc.sectors_raw, **kwargs)
 
     # mask outliers
-    p = np.vstack([ts.lc.bjd_raw,ts.lc.fnorm_raw,ts.lc.fdetrend_full,ts.lc.efnorm_raw,ts.lc.sectors_raw,ts.lc.qual_flags_raw]).T[ts.lc.mask].T
-    ts.lc.bjd, ts.lc.fnorm, ts.lc.fdetrend, ts.lc.efnorm, ts.lc.sectors, ts.lc.qual_flags = p
+    p = np.vstack([ts.lc.bjd_raw,ts.lc.fnorm_raw,ts.lc.fdetrend_full,ts.lc.efnorm_raw,ts.lc.sectors_raw,ts.lc.qual_flags_raw,ts.lc.detrend_model_full]).T[ts.lc.mask].T
+    ts.lc.bjd, ts.lc.fnorm, ts.lc.fdetrend, ts.lc.efnorm, ts.lc.sectors, ts.lc.qual_flags, ts.lc.detrend_model = p
     ts.lc.efnorm_rescaled = np.zeros_like(ts.lc.efnorm) + np.std(ts.lc.fdetrend)
-    ts.lc.detrend_model = ts.lc.fnorm / ts.lc.fdetrend
 
     # save LC plot
     if pltt:
@@ -138,8 +137,6 @@ def detrend_lightcurve_GP(ts, pltt=True):
     assert np.isfinite(ts.star.Prot)
 
     # detrend each sector individually and construct outlier mask
-    #kwargs = {'window_length_days': window_length_hrs/24}
-    #ts.lc.fdetrend_full, ts.lc.mask = mdt.detrend_all_sectors(ts.lc.bjd_raw, ts.lc.fnorm_raw, ts.lc.sectors_raw, **kwargs)
     ts.lc.fdetrend_full,ts.lc.mask,ts.lc.map_soln,extras = gpx.detrend_light_curve(ts.lc.bjd_raw, ts.lc.fnorm_raw, 
                                                                                    ts.lc.efnorm_raw, ts.lc.sectors_raw, 
                                                                                    ts.star.Prot)
@@ -179,15 +176,20 @@ def get_Prot_from_GLS(ts, pltt=True):
     # compute gls
     x, y = misc.bin_lc(ts.lc.bjd_raw, ts.lc.fnorm_raw)
     g = y != 0
-    gls = Gls((x[g], y[g], np.ones(g.sum())), fend=1/.5, fbeg=1/27)
-   
+    T = 27 * np.max([len(s) for s in ts.lc.sect_ranges])
+    gls = Gls((x[g], y[g], np.ones(g.sum())), fend=2, fbeg=1/T)
+
+    # save stuff
+    ts.gls.Pmin, ts.gls.Pmax = 1/gls.fend, 1/gls.fbeg
+    ts.gls.periods, ts.gls.power = 1/gls.freq, gls.power
+ 
     # check if there's a strong peak indicative of Prot
-    ts.star.Prot = 1/gls.freq[np.argmax(gls.power)] if gls.power.max() >= .4 else np.nan
+    ts.star.Prot = ts.gls.periods[np.argmax(ts.gls.power)] if ts.gls.power.max() >= .4 else np.nan
  
     # save gls plot
     if pltt:
         plt.figure(figsize=(8,4))
-        plt.plot(1/gls.freq, gls.power, 'k-', lw=.9, zorder=2)
+        plt.plot(ts.gls.periods, ts.gls.power, 'k-', lw=.9, zorder=2)
         plt.axvline(ts.star.Prot, ls='--', lw=2, zorder=1)
         plt.xscale('log')
         plt.title('Prot = %.3f days'%ts.star.Prot, fontsize=12)
