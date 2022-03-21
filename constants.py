@@ -19,7 +19,7 @@ maxsector = 50
 Nplanets_max = 3
 
 # stop the TLS search when the max SDE value is less than this value
-SDEthreshold = 6
+SDEthreshold = 5
 
 # define grid for injection-recovery
 Pgrid = .5, 30

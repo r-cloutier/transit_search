@@ -41,7 +41,7 @@ def compile_Tmags():
 
 def run_full_injection_recovery(Tmagmin, Tmagmax, use_20sec=False, overwrite=False, N1=500, N2=500):
     # group stars by Tmag (i.e. do inj-rec over Tmag bins)
-    injrec = _get_injrec_object(Tmagmin, Tmagmax)
+    injrec = get_injrec_object(Tmagmin, Tmagmax)
     df = pd.read_csv(Tmagfname)
     g = (df['Tmag'] >= injrec.Tmagmin) & (df['Tmag'] <= injrec.Tmagmax)
     injrec.tics, injrec.Tmags = np.ascontiguousarray(df['TIC'][g]), np.ascontiguousarray(df['Tmag'][g])
@@ -57,7 +57,7 @@ def run_full_injection_recovery(Tmagmin, Tmagmax, use_20sec=False, overwrite=Fal
    
 
 
-def _get_injrec_object(Tmagmin, Tmagmax):
+def get_injrec_object(Tmagmin, Tmagmax):
     '''
     Open an existing injrec object for this Tmag range if it exists. 
     Otherwise, create a new one and start from scratch.
@@ -466,7 +466,7 @@ def is_planet_detected(ts, thetainj, Psrec, Psrec_raw, rtol=.02):
     # check if there is a peak in the TLS that is not close to rotation
     is_detected = False
     for p in Psrec:
-        is_detected += np.any((np.isclose(Ppeaks, p, rtol=rtol))) & np.all(np.invert(np.isclose(Prots, p, rtol=rtol))) & np.all(np.invert(np.isclose(Psrec_raw, p, rtol=rtol))) & (snrinj >= 1) & (sdeinj >= cs.SDEthreshold) & (vet_Prot_injrec(ts, p))
+        is_detected += np.any((np.isclose(Ppeaks, p, rtol=rtol))) & np.all(np.invert(np.isclose(Prots, p, rtol=rtol))) & np.all(np.invert(np.isclose(Psrec_raw, p, rtol=rtol))) & (snrinj >= 2) & (sdeinj >= cs.SDEthreshold) & (vet_Prot_injrec(ts, p))
 
     return is_detected
 

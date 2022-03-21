@@ -6,6 +6,7 @@
 *.zip
 derive_SNR*
 compile_PCs.py
+injectionrecovery_TEST.py
 /n
 /MAST
 /TOIs
@@ -21,3 +22,4 @@ gls.py
 *tmp*
 *test*
 PCspreadsheet*.txt
+sensitivity_analysis.ipynb

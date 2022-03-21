@@ -67,7 +67,7 @@ def vet_SDE(ts):
 
 
 def vet_snr(ts):
-    ts.vetting.vetting_mask *= ts.vetting.snrOIs >= 1
+    ts.vetting.vetting_mask *= ts.vetting.snrOIs >= 2
 
 
 def vet_multiple_sectors(ts):
