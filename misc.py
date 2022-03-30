@@ -88,6 +88,11 @@ def estimate_snr(ts, P, T0, Rp):
     return Z/sig * np.sqrt(Ntransits)
 
 
+def estimate_Prot_snr(ts, amp_ppt, Prot):
+    T = 27 * np.unique(ts.lc.sectors).size
+    return amp_ppt*1e-3 / np.median(ts.lc.efnorm_rescaled) * np.sqrt(T/Prot)
+
+
 def bin_lc(x_fold, y, bin_width_min=60):
     bins = np.arange(x_fold.min(), x_fold.max(), bin_width_min/1440)
     denom, _ = np.histogram(x_fold, bins)

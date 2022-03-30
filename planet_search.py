@@ -134,7 +134,7 @@ def detrend_lightcurve_GP(ts, pltt=True):
 
     # check for rotation
     get_Prot_from_GLS(ts)
-    assert np.isfinite(ts.star.Prot)
+    assert ts.star.Prot < 5
 
     # detrend each sector individually and construct outlier mask
     ts.lc.fdetrend_full,ts.lc.mask,ts.lc.map_soln,extras = gpx.detrend_light_curve(ts.lc.bjd_raw, ts.lc.fnorm_raw, 
@@ -184,7 +184,7 @@ def get_Prot_from_GLS(ts, pltt=True):
     ts.gls.periods, ts.gls.power = 1/gls.freq, gls.power
  
     # check if there's a strong peak indicative of Prot
-    ts.star.Prot = ts.gls.periods[np.argmax(ts.gls.power)] if ts.gls.power.max() >= .4 else np.nan
+    ts.star.Prot = ts.gls.periods[np.argmax(ts.gls.power)] if ts.gls.power.max() >= cs.minGlspwr else np.nan
  
     # save gls plot
     if pltt:
