@@ -22,4 +22,6 @@ gls.py
 *tmp*
 *test*
 PCspreadsheet*.txt
+Protspreadsheet.csv
 sensitivity_analysis.ipynb
+

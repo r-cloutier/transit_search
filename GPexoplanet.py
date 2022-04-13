@@ -23,14 +23,10 @@ def build_model_0planets(x, y, Prot, mask=None, start=None):
         mean = pm.Normal("mean", mu=0.0, sd=10.0)
 
         # Transit jitter & GP parameters
-        #log_sigma_gp = pm.Normal("log_sigma_gp", mu=np.log(np.std(y[mask])), sd=1)
-        #log_rho_gp = pm.Uniform("log_rho_gp", lower=10, upper=20)
         log_sigma_gp = pm.Uniform("log_sigma_gp", lower=-3, upper=np.log(np.std(y[mask])))
         log_rho_gp = pm.Normal("log_rho_gp", mu=np.log(Prot), sd=1)
         log_tau_gp = pm.Uniform("log_tau_gp", lower=np.log(30*Prot), upper=20)
         log_sigma_lc = pm.Normal("log_sigma_lc", mu=np.log(MAD(y[mask])), sd=1)
-
-        resid = y[mask]
 
         # GP model for the light curve
         kernel = terms.SHOTerm(
@@ -39,6 +35,7 @@ def build_model_0planets(x, y, Prot, mask=None, start=None):
             tau=tt.exp(log_tau_gp),
         )
         gp = GaussianProcess(kernel, t=x[mask], yerr=tt.exp(log_sigma_lc))
+        resid = y[mask]
         gp.marginal("gp", observed=resid)
 
         # Fit for the maximum a posteriori parameters, I've found that I can get

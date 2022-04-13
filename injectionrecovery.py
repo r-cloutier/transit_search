@@ -460,7 +460,7 @@ def is_planet_detected(ts, thetainj, Psrec, Psrec_raw, rtol=.02):
     # get rotation periods and harmonics to reject
     Prots = []
     for j in range(1,4):
-        Prots.append(ts.star.Prot/j)
+        Prots.append(ts.star.Prot_gls/j)
     Prots = np.sort(Prots)
 
     # check if there is a peak in the TLS that is not close to rotation
@@ -478,7 +478,7 @@ def vet_Prot_injrec(ts, p, rtol=0.02):
     # get rotation periods and harmonics to reject
     Prots = []
     for j in range(1,4):
-        Prots.append(ts.star.Prot/j)
+        Prots.append(ts.star.Prot_gls/j)
     Prots = np.sort(Prots)
 
     # check each POI

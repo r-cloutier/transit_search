@@ -28,7 +28,7 @@ def run_full_planet_search(tic, use_20sec=False, overwrite=False):
         detrend_lightcurve_GP(ts)
         ts.lc.GPused = True
     except:
-        kwargs = {'window_length_hrs': 12}
+        kwargs = {'window_length_hrs': 12 if np.isnan(ts.star.Prot_gls) else 1}
         detrend_lightcurve_median(ts, **kwargs)
         ts.lc.GPused = False
 
@@ -134,12 +134,11 @@ def detrend_lightcurve_GP(ts, pltt=True):
 
     # check for rotation
     get_Prot_from_GLS(ts)
-    assert ts.star.Prot < 5
 
     # detrend each sector individually and construct outlier mask
     ts.lc.fdetrend_full,ts.lc.mask,ts.lc.map_soln,extras = gpx.detrend_light_curve(ts.lc.bjd_raw, ts.lc.fnorm_raw, 
                                                                                    ts.lc.efnorm_raw, ts.lc.sectors_raw, 
-                                                                                   ts.star.Prot)
+                                                                                   ts.star.Prot_gls)
 
     # mask outliers
     p = np.vstack([ts.lc.bjd_raw,ts.lc.fnorm_raw,ts.lc.fdetrend_full,ts.lc.efnorm_raw,ts.lc.sectors_raw,ts.lc.qual_flags_raw]).T[ts.lc.mask].T
@@ -173,26 +172,30 @@ def get_Prot_from_GLS(ts, pltt=True):
     Compute the GLS periodogram of the binned light curve and look for prominent 
     peaks to assess the presence of stellar rotation.
     '''
+    # get most consecutive sectors
+    sect_counts = [len(sr) for sr in ts.lc.sect_ranges]
+    g = np.in1d(ts.lc.sectors_raw, ts.lc.sect_ranges[np.argmax(sect_counts)])
+
     # compute gls
-    x, y = misc.bin_lc(ts.lc.bjd_raw, ts.lc.fnorm_raw)
+    x, y = misc.bin_lc(ts.lc.bjd_raw[g], ts.lc.fnorm_raw[g])
     g = y != 0
-    T = 27 * np.max([len(s) for s in ts.lc.sect_ranges])
-    gls = Gls((x[g], y[g], np.ones(g.sum())), fend=2, fbeg=1/T)
+    T = 27 * np.max(sect_counts)
+    gls = Gls((x[g], y[g], np.ones(g.sum())), fend=10, fbeg=1/T)
 
     # save stuff
     ts.gls.Pmin, ts.gls.Pmax = 1/gls.fend, 1/gls.fbeg
     ts.gls.periods, ts.gls.power = 1/gls.freq, gls.power
  
     # check if there's a strong peak indicative of Prot
-    ts.star.Prot = ts.gls.periods[np.argmax(ts.gls.power)] if ts.gls.power.max() >= cs.minGlspwr else np.nan
+    ts.star.Prot_gls = ts.gls.periods[np.argmax(ts.gls.power)] if ts.gls.power.max() >= cs.minGlspwr else np.nan
  
     # save gls plot
     if pltt:
         plt.figure(figsize=(8,4))
         plt.plot(ts.gls.periods, ts.gls.power, 'k-', lw=.9, zorder=2)
-        plt.axvline(ts.star.Prot, ls='--', lw=2, zorder=1)
+        plt.axvline(ts.star.Prot_gls, ls='--', lw=2, zorder=1)
         plt.xscale('log')
-        plt.title('Prot = %.3f days'%ts.star.Prot, fontsize=12)
+        plt.title('Prot = %.3f days'%ts.star.Prot_gls, fontsize=12)
         plt.ylabel('GLS power', fontsize=12), plt.xlabel('Period [days]', fontsize=12)
         plt.savefig('%s/MAST/TESS/TIC%i/gls.png'%(cs.repo_dir, ts.tic))
         plt.close('all') 
@@ -237,6 +240,7 @@ def run_tls_Nplanets(ts, pltt=True):
 
         # run tls on this sector
         iter_count = 1
+        print('\nRunning TLS for planet %i (sector(s) %s)\n'%(iter_count,slabel))
         results = _run_tls(*lc_input, ts.star.ab, period_max=float(Pmax))
         results.snr = misc.estimate_snr(ts, results['period'], results['T0'], misc.m2Rearth(misc.Rsun2m(results['rp_rs']*ts.star.Rs))) if np.isfinite(results['period']) else np.nan
         setattr(ts.tls, 'results_%i_s%s'%(iter_count,slabel), results)
@@ -244,12 +248,28 @@ def run_tls_Nplanets(ts, pltt=True):
         # mask out found signal
         lc_input = _mask_transits(*lc_input, getattr(ts.tls, 'results_%i_s%s'%(iter_count,slabel)))
 
-        while (iter_count <= cs.Nplanets_max) and (np.any(results.power) >= cs.SDEthreshold):
+        if pltt:
+            # plotting
+            plt.figure(figsize=(8,4))
+            plt.title('TIC %i - Sector(s) %s - TLS Run %i - Period %.3f days'%(ts.tic,slabel,iter_count,results.period))
+            plt.plot(results.periods, results.power, 'k-', lw=.5)
+            plt.axvline(results['period'], alpha=.4, lw=3)
+            plt.xlim(np.min(results['periods']), np.max(results['periods']))
+            plt.axvline(results.period, ls='--', alpha=.4)
+            for j in range(2,10):
+                plt.axvline(j*results.period, ls='--', alpha=.4)
+                plt.axvline(results.period/j, ls='--', alpha=.4)
+            plt.ylabel('SDE', fontsize=12)
+            plt.xlabel('Period [days]', fontsize=12)
+            plt.xlim(0, np.max(results.periods)*1.02)
+            plt.savefig('%s/MAST/TESS/TIC%i/sde_s%s_run%i'%(cs.repo_dir,ts.tic,slabel,iter_count))
+            plt.close('all')
 
-            print('\nRunning TLS for planet %i (sector(s) %s)\n'%(iter_count,slabel))
-            
+        while (iter_count < cs.Nplanets_max) and (np.any(results.power >= cs.SDEthreshold)):
+
             # run tls on this sector
             iter_count += 1
+            print('\nRunning TLS for planet %i (sector(s) %s)\n'%(iter_count,slabel))
             results = _run_tls(*lc_input, ts.star.ab, period_max=float(Pmax))
             setattr(ts.tls, 'results_%i_s%s'%(iter_count,slabel), results)
 
@@ -287,6 +307,7 @@ def vet_planets(ts):
     pv.vet_multiple_sectors(ts)
     pv.vet_odd_even_difference(ts)
     pv.vet_Prot(ts)
+    pv.vet_tls_Prot(ts)
     #pv.plot_light_curves(ts)
     pv.save_planet_parameters(ts)
 

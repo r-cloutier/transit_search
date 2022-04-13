@@ -6,6 +6,7 @@ import constants as cs
 from injectionrecovery import transit_model
 import misc, pdb
 
+MAD = lambda arr: np.nanmedian(abs(arr - np.nanmedian(arr)))
 
 def get_POIs(ts):
     '''
@@ -96,12 +97,40 @@ def vet_Prot(ts, rtol=0.02):
     # get rotation periods and harmonics to reject
     Prots = []
     for j in range(1,4):
-        Prots.append(ts.star.Prot/j)
+        Prots.append(ts.star.Prot_gls/j)
     Prots = np.sort(Prots)
 
     # check each POI
     for i,p in enumerate(ts.vetting.POIs):
         ts.vetting.vetting_mask[i] *= np.all(np.invert(np.isclose(Prots, p, rtol=rtol)))
+
+
+def vet_tls_Prot(ts, rtol=0.02, sig=3):
+    '''
+    Check that the tls did not likely return a rotation signature, which can happen if the gls 
+    fails to flag stellar rotation.
+    '''
+    for i,p in enumerate(ts.vetting.POIs):
+        for k in ts.tls.__dict__.keys():
+            per, pwr = getattr(ts.tls,k).periods, getattr(ts.tls,k).power
+            is_harmonic_significant = np.zeros(4).astype(bool)    # check that sde at the harmonics are large
+            is_harmonic_decreasing = np.zeros(3).astype(bool)     # check that the sde of the peaks are decreasing
+            for n in range(1,5):
+                g = np.isclose(per, p*n, rtol=rtol) 
+                if g.sum() > 0:
+                    is_harmonic_significant[n-1] = np.max(pwr[g]) >= sig*MAD(pwr)
+                    if n > 1: is_harmonic_decreasing[n-2] = np.max(pwr[g]) <= np.max(pwr[np.isclose(per, p*(n-1), rtol=rtol)])
+                else:
+                    is_harmonic_significant[n-1] = False
+            ts.vetting.vetting_mask[i] *= not (np.all(is_harmonic_significant) and np.all(is_harmonic_decreasing))    # false POI if all the harmonics have significant peaks and show decreasing pwr with increasing period
+            
+            # save the tls-recovered period if found
+            if np.all(is_harmonic_significant) and np.all(is_harmonic_decreasing):
+                ts.vetting.vetting_mask[i] = False
+                ts.star.Prot_tls = p
+            elif not hasattr(ts.star,'Prot_tls'):
+                ts.star.Prot_tls = np.nan
+
 
 
 

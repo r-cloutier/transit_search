@@ -380,7 +380,7 @@ def run_gls(injrec, ts, Prot_inj):
     x, y = misc.bin_lc(injrec.bjd, injrec.finjected)
     g = y != 0
     T = 27 * np.max([len(s) for s in ts.lc.sect_ranges])
-    gls = Gls((x[g], y[g], np.ones(g.sum())), fend=2, fbeg=1/T)
+    gls = Gls((x[g], y[g], np.ones(g.sum())), fend=10, fbeg=1/T)
     periods, power = 1/gls.freq, gls.power
 
     # check if there's a strong peak indicative of Prot
