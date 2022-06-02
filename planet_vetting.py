@@ -60,15 +60,19 @@ def get_POIs(ts):
     # they may be real (e.g. L 98-59)
     ts.vetting.POIs,ts.vetting.T0OIs,ts.vetting.DOIs,ts.vetting.ZOIs,ts.vetting.rpRsOIs,ts.vetting.chi2minOIs,ts.vetting.chi2redminOIs,ts.vetting.SDErawOIs,ts.vetting.SDEOIs,ts.vetting.snrOIs,ts.vetting.oddevendiff_sigma,ts.vetting.NoccurrencesOIs = POIsv3.T
     ts.vetting.vetting_mask = np.ones(POIsv3.shape[0]).astype(bool)
-
+    ts.vetting.conditions = np.zeros(POIsv3.shape[0])
 
 
 def vet_SDE(ts):
-    ts.vetting.vetting_mask *= ts.vetting.SDEOIs >= cs.SDEthreshold
+    g = ts.vetting.SDEOIs >= cs.SDEthreshold
+    ts.vetting.vetting_mask *= g
+    ts.vetting.conditions[np.invert(g)] += 1  # condition1
 
 
 def vet_snr(ts):
-    ts.vetting.vetting_mask *= ts.vetting.snrOIs >= 3
+    g = ts.vetting.snrOIs >= 2
+    ts.vetting.vetting_mask *= g
+    ts.vetting.conditions[np.invert(g)] += 2 # condition2
 
 
 def vet_multiple_sectors(ts):
@@ -79,15 +83,18 @@ def vet_multiple_sectors(ts):
     if ts.lc.Nsect <= 1:
         pass
     else:
-        ts.vetting.vetting_mask *= ts.vetting.NoccurrencesOIs > 1
-
+        g = ts.vetting.NoccurrencesOIs > 1
+        ts.vetting.vetting_mask *= g
+        ts.vetting.conditions[np.invert(g)] += 4  # condition4
 
         
 def vet_odd_even_difference(ts):
     '''
     Check for a significant odd-even difference in the transit depths.
     '''
-    ts.vetting.vetting_mask *= ts.vetting.oddevendiff_sigma < 3
+    g = ts.vetting.oddevendiff_sigma < 3
+    ts.vetting.vetting_mask *= g
+    ts.vetting.conditions[np.invert(g)] += 8  # condition8
 
 
 def vet_Prot(ts, rtol=0.02):
@@ -102,7 +109,10 @@ def vet_Prot(ts, rtol=0.02):
 
     # check each POI
     for i,p in enumerate(ts.vetting.POIs):
-        ts.vetting.vetting_mask[i] *= np.all(np.invert(np.isclose(Prots, p, rtol=rtol)))
+        g = np.all(np.invert(np.isclose(Prots, p, rtol=rtol)))
+        ts.vetting.vetting_mask[i] *= g
+        if not g: ts.vetting.conditions[i] += 16  # condition16
+
 
 
 def vet_tls_Prot(ts, rtol=0.02, sig=3):
@@ -111,6 +121,7 @@ def vet_tls_Prot(ts, rtol=0.02, sig=3):
     fails to flag stellar rotation.
     '''
     for i,p in enumerate(ts.vetting.POIs):
+        rotation_signature = []
         for k in ts.tls.__dict__.keys():
             per, pwr = getattr(ts.tls,k).periods, getattr(ts.tls,k).power
             is_harmonic_significant = np.zeros(4).astype(bool)    # check that sde at the harmonics are large
@@ -122,18 +133,18 @@ def vet_tls_Prot(ts, rtol=0.02, sig=3):
                     if n > 1: is_harmonic_decreasing[n-2] = np.max(pwr[g]) <= np.max(pwr[np.isclose(per, p*(n-1), rtol=rtol)])
                 else:
                     is_harmonic_significant[n-1] = False
-            ts.vetting.vetting_mask[i] *= not (np.all(is_harmonic_significant) and np.all(is_harmonic_decreasing))    # false POI if all the harmonics have significant peaks and show decreasing pwr with increasing period
-            
-            # save the tls-recovered period if found
-            if np.all(is_harmonic_significant) and np.all(is_harmonic_decreasing):
-                ts.vetting.vetting_mask[i] = False
-                ts.star.Prot_tls = p
-            elif not hasattr(ts.star,'Prot_tls'):
-                ts.star.Prot_tls = np.nan
+            g = np.all(is_harmonic_significant) and np.all(is_harmonic_decreasing)    # false POI if all the harmonics have significant peaks and show decreasing pwr with increasing period
+            rotation_signature.append(g)
+        ts.vetting.vetting_mask[i] *= np.sum(rotation_signature)/len(rotation_signature) <= .5  # need at least half of sectors to favour rotation
+        
+        # save the tls-recovered period if found
+        if np.sum(rotation_signature)/len(rotation_signature) >= .5: 
+            ts.vetting.conditions[i] += 32  # condition32
+            ts.star.Prot_tls = p
+        elif not hasattr(ts.star,'Prot_tls'):
+            ts.star.Prot_tls = np.nan
 
-
-
-
+ 
 def plot_light_curves(ts):
     '''
     For each vetted PC, plot the light curve to highlight the transits.
@@ -176,6 +187,25 @@ def plot_light_curves(ts):
             continue
             
 
+def identify_conditions(ts):
+    '''Given the base 2 condition flags, identify the individual flags.'''
+    ts.vetting.conditions_indiv = []
+
+    for i,c in enumerate(ts.vetting.conditions):
+        v = []
+        while (c > 0): 
+            v.append(int(c % 2)) 
+            c = int(c / 2)
+        # list of individual flags for each OI
+        ts.vetting.conditions_indiv.append(list(2**np.where(v)[0]))
+
+    # save parameter definitions
+    p = np.genfromtxt('vetting_flags.txt', delimiter=',', dtype='|S70')
+    flags, labels = p[:,0].astype(int), p[:,1].astype(str)
+    ts.vetting.conditions_defs = {}
+    for i,f in enumerate(flags):
+        ts.vetting.conditions_defs[f] = labels[i]
+
 
 def save_planet_parameters(ts):
     N = ts.vetting.POIs.size
@@ -188,10 +218,10 @@ def save_planet_parameters(ts):
                       ts.vetting.chi2redminOIs, ts.vetting.SDErawOIs,
                       ts.vetting.SDEOIs, ts.vetting.snrOIs,
                       ts.vetting.oddevendiff_sigma, ts.vetting.NoccurrencesOIs,
-                      np.repeat(ts.lc.Nsect, N), ts.vetting.vetting_mask]).T
+                      np.repeat(ts.lc.Nsect, N), ts.vetting.vetting_mask, ts.vetting.conditions]).T
     df = pd.DataFrame(outp, columns=['TIC','sectors','RA','Dec','Tmag','Teff','Ms','Rs',
                                      'P','T0','duration_hrs','depth_ppt','rpRs',
                                      'chi2min','chi2redmin','SDEraw','SDE','snr',
-                                     'oddevendiff_sig','Noccurrences','Nsectors','vetted?'])
+                                     'oddevendiff_sig','Noccurrences','Nsectors','vetted?','vetting_conditions'])
     df = df.sort_values('SDE', ascending=False)
     df.to_csv('%s/MAST/TESS/TIC%i/planetparams_%i.csv'%(cs.repo_dir, ts.tic, ts.tic), index=False)

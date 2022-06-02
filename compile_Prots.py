@@ -4,7 +4,7 @@ import glob, pandas
 
 fs=np.sort(glob.glob('MAST/TESS/TIC*/TESSLC_planetsearch'))
 
-outarr = np.zeros((fs.size,7))
+outarr = np.zeros((fs.size,7)) * np.nan
 
 for i,f in enumerate(fs):
     print(i/fs.size)
@@ -14,5 +14,6 @@ for i,f in enumerate(fs):
     except AttributeError:
         pass
 
-df = pandas.DataFrame(outarr, columns=['TIC','Tmag','Teff','Ms','Rs','Prot_gls','Prot_tls'])
-df.to_csv('/n/home10/rcloutier/TLS/Protspreadsheet.csv')
+g = np.isfinite(outarr[:,5]) | np.isfinite(outarr[:,6])
+df = pandas.DataFrame(outarr[g], columns=['TIC','Tmag','Teff','Ms','Rs','Prot_gls','Prot_tls'])
+df.to_csv('/n/home10/rcloutier/TLS/Protspreadsheet.csv', index=False)

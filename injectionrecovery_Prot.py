@@ -11,6 +11,8 @@ from injrec_object import *
 import constants as cs
 import transitleastsquares as tls
 import define_tls_grid as dtg
+from injectionrecovery import run_tls
+
 
 global Tmagfname
 Tmagfname = '%s/Tmag_file.csv'%cs.repo_dir
@@ -74,6 +76,7 @@ def get_injrec_object(Tmagmin, Tmagmax):
     return injrec 
 
 
+
 def bin_stars_Tmag(Tmagmin, Tmagmax, ticids):
     '''
     Read in Tmags and only keep stars within the desired range of TESS 
@@ -97,8 +100,8 @@ def bin_stars_Tmag(Tmagmin, Tmagmax, ticids):
 def do_injection_recovery(injrec, N1=500, N2=500, overwrite=True, pltt=True):
     '''
     Sample rotation periods and photometric amplitudes from a grid, inject them
-    into a light curve with known sampling and uncertainties, then attempt to
-    recover them using the GLS.
+    into a light curve with known time sampling and uncertainties, then attempt
+    to recover them using the GLS.
     '''
     # do it twice so we can save in between
     if not injrec.DONE1 or overwrite:
@@ -115,8 +118,8 @@ def _run_injection_recovery_iter1(injrec, N1=500):
     amp, Prot, Gamma = sample_rotation_uniform(N1)
 
     # for every planet, run the TLS and flag planet as recovered or not
-    injrec_results = np.zeros((N1,7))
-    snr, gls_pwr = np.zeros(N1), np.zeros(N1)
+    injrec_results = np.zeros((N1,8))
+    snr, gls_pwr, sde = np.zeros(N1), np.zeros(N1), np.zeros(N1)
     for i in range(N1):
 
         print('%.3f (first set)'%(i/N1))
@@ -136,8 +139,14 @@ def _run_injection_recovery_iter1(injrec, N1=500):
         
         # run GLS
         print('\nRunning injection-recovery on TIC %i (amp=%.1f ppt, Prot=%.1f days, Gamma=%.1f, S/N=%.1f)'%tuple(injrec_results[i,:5]))
-        det, gls_pwr[i] = run_gls(injrec, ts, Prot[i])
-        injrec_results[i,5:] = gls_pwr[i], det
+        detgls, gls_pwr[i] = run_gls(injrec, ts, Prot[i])
+        dettls, sde[i] = False, np.nan
+
+        # run TLS if necessary 
+        if not detgls:
+            dettls, sde[i] = run_tls_Prot(injrec, ts)
+
+        injrec_results[i,5:] = gls_pwr[i], sde[i], detgls or dettls
 
 
     # compute sensitivity vs snr
@@ -146,7 +155,7 @@ def _run_injection_recovery_iter1(injrec, N1=500):
     sens_gridv1 = np.zeros(snr_grid.size)
     for i in range(snr_grid.size):
         g = (snr > snr_grid_big[i]) & (snr <= snr_grid_big[i+1])
-        sens_gridv1[i] = injrec_results[g,6].sum()/g.sum() if g.sum() > 0 else np.nan
+        sens_gridv1[i] = injrec_results[g,7].sum()/g.sum() if g.sum() > 0 else np.nan
     
     # compute sensitivity vs gls power
     glspwr_grid_big = np.arange(51)/50
@@ -154,7 +163,15 @@ def _run_injection_recovery_iter1(injrec, N1=500):
     sens_gridv2 = np.zeros(glspwr_grid.size)
     for i in range(glspwr_grid.size):
         g = (gls_pwr > glspwr_grid_big[i]) & (gls_pwr <= glspwr_grid_big[i+1])
-        sens_gridv2[i] = injrec_results[g,6].sum()/g.sum() if g.sum() > 0 else np.nan
+        sens_gridv2[i] = injrec_results[g,7].sum()/g.sum() if g.sum() > 0 else np.nan
+
+    # compute sensitivity vs snr
+    sde_grid_big = np.arange(0,50)
+    sde_grid = sde_grid_big[1:] - np.diff(sde_grid_big)[0]/2
+    sens_gridv3 = np.zeros(sde_grid.size)
+    for i in range(sde_grid.size):
+        g = (sde > sde_grid_big[i]) & (sde <= sde_grid_big[i+1])
+        sens_gridv3[i] = injrec_results[g,7].sum()/g.sum() if g.sum() > 0 else np.nan
 
     # fit the sensitivity curve with a Gamma CDF
     g = np.isfinite(sens_gridv2)
@@ -165,18 +182,25 @@ def _run_injection_recovery_iter1(injrec, N1=500):
     # recompute sensitivity vs snr
     for i in range(snr_grid.size):
         g = (injrec_results[:,4] > snr_grid_big[i]) & (injrec_results[:,4] <= snr_grid_big[i+1])
-        sens_gridv1[i] = injrec_results[g,6].sum()/g.sum() if g.sum() > 0 else np.nan
+        sens_gridv1[i] = injrec_results[g,7].sum()/g.sum() if g.sum() > 0 else np.nan
 
     # recompute sensitivity vs gls power
     for i in range(glspwr_grid.size):
         g = (injrec_results[:,5] > glspwr_grid_big[i]) & (injrec_results[:,5] <= glspwr_grid_big[i+1])
-        sens_gridv2[i] = injrec_results[g,6].sum()/g.sum() if g.sum() > 0 else np.nan
+        sens_gridv2[i] = injrec_results[g,7].sum()/g.sum() if g.sum() > 0 else np.nan
+
+    # recompute sensitivity vs sde
+    for i in range(sde_grid.size):
+        g = (injrec_results[:,6] > sde_grid_big[i]) & (injrec_results[:,6] <= sde_grid_big[i+1])
+        sens_gridv3[i] = injrec_results[g,7].sum()/g.sum() if g.sum() > 0 else np.nan
 
     # fit the sensitivity curve with a Gamma CDF
     injrec.snr_grid, injrec.sens_snr_grid = snr_grid, sens_gridv1
     injrec.snr_grid_big = snr_grid_big
     injrec.glspwr_grid, injrec.sens_glspwr_grid = glspwr_grid, sens_gridv2
     injrec.glspwr_grid_big = glspwr_grid_big
+    injrec.sde_grid, injrec.sens_sde_grid = sde_grid, sens_gridv3
+    injrec.sde_grid_big = sde_grid_big
 
     g = np.isfinite(sens_gridv1)
     injrec.popt_snr,_ = curve_fit(_gammaCDF, snr_grid[g], sens_gridv1[g], p0=[15,.5])
@@ -187,6 +211,11 @@ def _run_injection_recovery_iter1(injrec, N1=500):
     injrec.popt_glspwr,_ = curve_fit(_gammaCDF, glspwr_grid[g], sens_gridv2[g], p0=[15,.5])
     injrec.glspwr_model = np.linspace(0,1,1000)
     injrec.sens_glspwr_model = _gammaCDF(injrec.glspwr_model, *injrec.popt_glspwr)
+
+    g = np.isfinite(sens_gridv3)
+    injrec.popt_sde,_ = curve_fit(_gammaCDF, sde_grid[g], sens_gridv3[g], p0=[15,.5])
+    injrec.sde_model = np.linspace(0,np.nanmax(sde),1000)
+    injrec.sens_sde_model = _gammaCDF(injrec.sde_model, *injrec.popt_sde)
 
     # save results
     injrec.injrec_results = injrec_results
@@ -200,9 +229,9 @@ def _run_injection_recovery_iter2(injrec, N2=500, pltt=True):
 
     # for every planet, run the TLS and flag planet as recovered or not
     N2 = int(N2)
-    injrec_resultsv2 = np.zeros((N2,7))
+    injrec_resultsv2 = np.zeros((N2,8))
     amp, Prot, Gamma = np.zeros(N2), np.zeros(N2), np.zeros(N2)
-    snr, gls_pwr = np.zeros(N2), np.zeros(N2)
+    snr, gls_pwr, sde = np.zeros(N2), np.zeros(N2), np.zeros(N2)
     for i in range(N2):
 
         print('%.3f (second set)'%(i/N2))
@@ -225,8 +254,14 @@ def _run_injection_recovery_iter2(injrec, N2=500, pltt=True):
         
         # run GLS
         print('\nRunning injection-recovery on TIC %i (amp=%.1f ppt, Prot=%.1f days, Gamma=%.1f, S/N=%.1f)'%tuple(injrec_resultsv2[i,:5]))
-        det, gls_pwr[i] = run_gls(injrec, ts, Prot[i])
-        injrec_resultsv2[i,5:] = gls_pwr[i], det
+        detgls, gls_pwr[i] = run_gls(injrec, ts, Prot[i])
+        dettls, sde[i] = False, np.nan
+
+        # run TLS if necessary 
+        if not detgls:
+            dettls, sde[i] = run_tls_Prot(injrec, ts)
+
+        injrec_resultsv2[i,5:] = gls_pwr[i], sde[i], detgls or dettls
 
     # combine results
     injrec_results = np.vstack([injrec.injrec_results, injrec_resultsv2])
@@ -236,20 +271,29 @@ def _run_injection_recovery_iter2(injrec, N2=500, pltt=True):
     sens_gridv1 = np.zeros_like(snr_grid)
     for i in range(snr_grid.size):
         g = (injrec_results[:,4] > snr_grid_big[i]) & (injrec_results[:,4] <= snr_grid_big[i+1])
-        sens_gridv1[i] = injrec_results[g,6].sum()/g.sum() if g.sum() > 0 else np.nan
+        sens_gridv1[i] = injrec_results[g,7].sum()/g.sum() if g.sum() > 0 else np.nan
     
     # recompute sensitivity vs gls power
     glspwr_grid, glspwr_grid_big = injrec.glspwr_grid, injrec.glspwr_grid_big
     sens_gridv2 = np.zeros_like(glspwr_grid)
     for i in range(glspwr_grid.size):
         g = (injrec_results[:,5] > glspwr_grid_big[i]) & (injrec_results[:,5] <= glspwr_grid_big[i+1])
-        sens_gridv2[i] = injrec_results[g,6].sum()/g.sum() if g.sum() > 0 else np.nan
+        sens_gridv2[i] = injrec_results[g,7].sum()/g.sum() if g.sum() > 0 else np.nan
+
+    # recompute sensitivity vs sde
+    sde_grid, sde_grid_big = injrec.sde_grid, injrec.sde_grid_big
+    sens_gridv3 = np.zeros_like(sde_grid)
+    for i in range(sde_grid.size):
+        g = (injrec_results[:,6] > sde_grid_big[i]) & (injrec_results[:,6] <= sde_grid_big[i+1])
+        sens_gridv3[i] = injrec_results[g,7].sum()/g.sum() if g.sum() > 0 else np.nan
 
     # fit the sensitivity curve with a Gamma CDF
     injrec.snr_grid, injrec.sens_snr_grid = snr_grid, sens_gridv1
     injrec.snr_grid_big = snr_grid_big
     injrec.glspwr_grid, injrec.sens_glspwr_grid = glspwr_grid, sens_gridv2
     injrec.glspwr_grid_big = glspwr_grid_big
+    injrec.sde_grid, injrec.sens_sde_grid = sde_grid, sens_gridv1
+    injrec.sde_grid_big = sde_grid_big
 
     g = np.isfinite(sens_gridv1)
     injrec.popt_snr,_ = curve_fit(_gammaCDF, snr_grid[g], sens_gridv1[g], p0=[15,.5])
@@ -261,8 +305,13 @@ def _run_injection_recovery_iter2(injrec, N2=500, pltt=True):
     injrec.glspwr_model = np.linspace(0,1,1000)
     injrec.sens_glspwr_model = _gammaCDF(injrec.glspwr_model, *injrec.popt_glspwr)
 
+    g = np.isfinite(sens_gridv3)
+    injrec.popt_sde,_ = curve_fit(_gammaCDF, sde_grid[g], sens_gridv3[g], p0=[15,.5])
+    injrec.sde_model = np.linspace(0,np.nanmax(sde),1000)
+    injrec.sens_sde_model = _gammaCDF(injrec.sde_model, *injrec.popt_sde)
+
     # save results
-    injrec.tics_inj, injrec.amps, injrec.Prots, injrec.Gammas, injrec.snrs, injrec.glspwrs, injrec.recovered = injrec_results.T
+    injrec.tics_inj, injrec.amps, injrec.Prots, injrec.Gammas, injrec.snrs, injrec.glspwrs, injrec.sdes, injrec.recovered = injrec_results.T
     delattr(injrec, 'injrec_results')
     injrec.DONE = True
  
@@ -391,6 +440,58 @@ def run_gls(injrec, ts, Prot_inj):
     return is_detected, gls_pwr
 
 
+def run_tls_Prot(injrec, ts, Nmax=3, rtol=0.02):
+    '''
+    Run the Transit-Least-Squares search for signals in an input
+    (detrended) light curve.
+    '''
+    is_detected = False
+    for i,sect in enumerate(ts.lc.sect_ranges):
+
+        g = np.in1d(ts.lc.sectors, sect)
+        lc_input_raw = ts.lc.bjd[g], ts.lc.fdetrend[g], ts.lc.efnorm_rescaled[g]
+        lc_input = ts.lc.bjd[g], injrec.finjected[g], ts.lc.efnorm_rescaled[g]
+        slabel = '%i'%sect[0] if len(sect) == 1 else '%i-%i'%(min(sect),max(sect))
+
+        # run the tls and search for the injected rotation signal
+        print('\nRunning TLS for injection-recovery (sector(s) %s)\n'%(slabel))
+
+        # run tls on this sector for light curves with and without the injected planet (i.e. null)
+        T = ts.lc.bjd[g].max() - ts.lc.bjd[g].min()
+        results_raw = run_tls(*lc_input_raw, ts.star.ab, period_max=T)
+        results = run_tls(*lc_input, ts.star.ab, period_max=T)
+
+        # get highest peaks in the TLS of the null light curve
+        g = results_raw['power'] >= 0  # TEMP??
+        s = np.argsort(results_raw['power'][g])[::-1]
+        Psrec_raw = results_raw['periods'][g][s][:int(Nmax)]
+
+        # get highest peaks in the TLS
+        ##g = results['power'] >= cs.SDEthreshold
+        g = results['power'] >= 0  # TEMP??
+        s = np.argsort(results['power'][g])[::-1]
+        Psrec = results['periods'][g][s][:int(Nmax)]
+
+        # check if rotation is recovered
+        g = np.isclose(results['periods'], injrec.argsinjected[1], rtol=.05)
+        if g.sum() > 0:
+            is_detected += is_rotation_detected(injrec.argsinjected[1], Psrec, rtol=rtol)
+        else:
+            is_detected += False
+
+        detlabel = 'is' if is_detected else 'is not'
+        print('\nInjected rotation %s detected around TIC %i'%(detlabel, ts.tic))
+
+        # get SDE of the injected period (if P > Pmax then there's no SDE value)
+        g = np.isclose(results['periods'], injrec.argsinjected[1], rtol=rtol)
+        sde = np.nanmax(results['power'][g]) if g.sum() > 0 else np.nan
+
+        # stop searching if the rotation signal is found
+        if is_detected:
+            return is_detected, sde
+
+    return is_detected, sde
+
 
 def is_rotation_detected(Prot_inj, Prot_rec, rtol=.02):
     '''
@@ -405,7 +506,8 @@ def is_rotation_detected(Prot_inj, Prot_rec, rtol=.02):
     Ppeaks = np.sort(Ppeaks)
 
     # check if the GLS peak is close to the injected peak or a harmonic
-    is_detected = np.any((np.isclose(Ppeaks, Prot_rec, rtol=rtol)))
+    is_detected = False
+    for p in np.ascontiguousarray(Prot_rec):
+        is_detected += np.any((np.isclose(Ppeaks, p, rtol=rtol)))
     
     return is_detected
-

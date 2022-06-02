@@ -303,11 +303,12 @@ def vet_planets(ts):
     print('\nVetting planet candidates around TIC %i\n'%ts.tic)
     pv.get_POIs(ts)
     pv.vet_SDE(ts)
-    pv.vet_snr(ts)
+    pv.vet_snr(ts)   # snr<3: TOIs 2136
     pv.vet_multiple_sectors(ts)
     pv.vet_odd_even_difference(ts)
     pv.vet_Prot(ts)
     pv.vet_tls_Prot(ts)
+    pv.identify_conditions(ts)
     #pv.plot_light_curves(ts)
     pv.save_planet_parameters(ts)
 
@@ -320,7 +321,7 @@ def _run_tls(bjd, fdetrend, efnorm, ab, period_max=0):
         results = model.power(u=ab, period_max=period_max, 
                               period_min=np.min(cs.Pgrid))
     else:
-        results = model.power(u=ab, period_min=np.min(cs.Pgrid[0]))
+        results = model.power(u=ab, period_min=np.min(cs.Pgrid))
     return results
 
 

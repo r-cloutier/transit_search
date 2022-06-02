@@ -93,6 +93,12 @@ def estimate_Prot_snr(ts, amp_ppt, Prot):
     return amp_ppt*1e-3 / np.median(ts.lc.efnorm_rescaled) * np.sqrt(T/Prot)
 
 
+def compute_insolation(Teff, Rs, Ms, P):
+    L = Rs**2 * (Teff/5780)**4
+    F = L / semimajoraxis(P, Ms, 0)**2
+    return F
+
+
 def bin_lc(x_fold, y, bin_width_min=60):
     bins = np.arange(x_fold.min(), x_fold.max(), bin_width_min/1440)
     denom, _ = np.histogram(x_fold, bins)

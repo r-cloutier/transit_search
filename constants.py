@@ -4,7 +4,7 @@ global t0, plot_dir, minsector, maxsector, P_duplicate_fraction, Nplanets_min, S
 t0 = 2457e3
 
 # base directory that holds everything
-repo_dir = '/Users/ryancloutier/Research/TLS'
+repo_dir = '/n/home10/rcloutier/TLS'
 
 # fractional threshold for identifying duplicate periods in the TLS
 P_duplicate_fraction = 0.02
@@ -13,7 +13,7 @@ P_duplicate_fraction = 0.02
 minsector = 1
 
 # highest TESS sector to search for data
-maxsector = 50
+maxsector = 55
 
 # minimum number of planets to search for with the TLS
 Nplanets_max = 3
@@ -25,8 +25,8 @@ SDEthreshold = 5
 minGlspwr = .1
 
 # define grid for injection-recovery
-Pgrid = .5, 30   # days
-Rpgrid = .5, 4   # Rearth
+Pgrid = .1, 30   # days
+Rpgrid = .1, 4   # Rearth
 bgrid = 0, .9
 ampgrid = .1, 100  # ppt
 Protgrid = .1, 100  # days
