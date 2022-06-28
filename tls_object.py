@@ -42,4 +42,7 @@ class transit_search:
     class VETTING:
         pass
     class INJREC:
-        pass
+        def __init__(self):
+            self.vetting = self.VETTING()
+        class VETTING:
+            pass
