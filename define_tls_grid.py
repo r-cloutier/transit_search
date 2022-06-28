@@ -30,7 +30,7 @@ def get_Ntransit_vs_period(tic, bjd, sectors, pltt=True):
                 Ntransits_covered[si,i,j] = np.sum(abs(_foldAt(bjd[g],p,t0)) < .5*2/60/24/p)
 
         # get Pmax for this sector
-        Pmax_per_sector[si] = Pmax[np.median(Ntransits_covered[si],1) >= 2][-1]
+        Pmax_per_sector[si] = Pmax[np.median(Ntransits_covered[si],1) >= cs.Ntransits_min][-1]
 
 
     # plot

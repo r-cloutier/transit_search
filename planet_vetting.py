@@ -70,7 +70,7 @@ def vet_SDE(ts):
 
 
 def vet_snr(ts):
-    g = ts.vetting.snrOIs >= 2
+    g = ts.vetting.snrOIs >= cs.SNRthreshold
     ts.vetting.vetting_mask *= g
     ts.vetting.conditions[np.invert(g)] += 2 # condition2
 
@@ -144,6 +144,34 @@ def vet_tls_Prot(ts, rtol=0.02, sig=3):
         elif not hasattr(ts.star,'Prot_tls'):
             ts.star.Prot_tls = np.nan
 
+
+def model_comparison(ts):
+    '''
+    In each sector that each PC is found in, check that the delta BIC favours 
+    the transit model over the null hypothesis (i.e. a flat line).
+    '''
+    for i,p in enumerate(ts.vetting.POIs):
+        dBIC_vetted = []  # if True, then transit model is favoured by the dBIC
+        for k in ts.tls.__dict__.keys():
+            # get tls results
+            res = getattr(ts.tls, k)
+
+            if np.isclose(res['period'], p, rtol=cs.P_duplicate_fraction):
+                # interpolate transit model grid to observation epochs 
+                # (add zero and one to the phase edges to avoid bound_errors)
+                fint = interp1d(np.hstack([0,res['model_folded_phase'],1]), np.hstack([1,res['model_folded_model'],1]))
+                model = fint(res['folded_phase'])
+
+                # compute delta BIC (i.e. transit minus line)
+                ey = np.median(ts.lc.efnorm_rescaled)
+                BIC_transit, BIC_null = misc.dBIC(res['folded_y'], ey, model)
+                dBIC_vetted.append(BIC_transit - BIC_null <= -10)
+
+        # does each sector favour this PC's transit model?
+        g = np.all(dBIC_vetted)
+        ts.vetting.vetting_mask[i] *= g
+        if not g: ts.vetting.conditions[i] += 64  # condition64
+
  
 def plot_light_curves(ts):
     '''
@@ -200,7 +228,7 @@ def identify_conditions(ts):
         ts.vetting.conditions_indiv.append(list(2**np.where(v)[0]))
 
     # save parameter definitions
-    p = np.genfromtxt('vetting_flags.txt', delimiter=',', dtype='|S70')
+    p = np.genfromtxt('/n/home10/rcloutier/TLS/vetting_flags.txt', delimiter=',', dtype='|S70')
     flags, labels = p[:,0].astype(int), p[:,1].astype(str)
     ts.vetting.conditions_defs = {}
     for i,f in enumerate(flags):

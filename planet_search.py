@@ -17,7 +17,7 @@ def run_full_planet_search(tic, use_20sec=False, overwrite=False):
     Run each step of the transit search and save the results.
     '''
     # skip if this TIC already has a completed planet search
-    if (is_already_done(tic)) & (overwrite == False):
+    if is_already_done(tic) and not overwrite:
         return None
 
     kwargs = {'minsector': cs.minsector, 'maxsector': cs.maxsector,
@@ -32,20 +32,27 @@ def run_full_planet_search(tic, use_20sec=False, overwrite=False):
         detrend_lightcurve_median(ts, **kwargs)
         ts.lc.GPused = False
 
-    run_tls_Nplanets(ts)
-    ts.pickleobject()
-    vet_planets(ts)
-    ts.DONE = True
-    ts.pickleobject()
- 
+    try:
+        run_tls_Nplanets(ts)
+        ts.pickleobject()
+        vet_planets(ts)
+        setattr(ts, 'DONEcheck_version', cs.DONEcheck_version)
+        ts.DONE = True
+        ts.pickleobject()
+    except Exception:
+        pass 
+
     return ts
-    
+
 
 
 def is_already_done(tic):
     fname = '%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir, tic)
-    return loadpickle(fname).DONE if os.path.exists(fname) else False
-
+    if os.path.exists(fname):
+        ts = loadpickle(fname)
+        return ts.DONE and hasattr(ts,'DONEcheck_version') 
+    else:
+        return False
 
 
 def read_in_lightcurve(tic, minsector=1, maxsector=56, use_20sec=False, pltt=True):
@@ -213,6 +220,10 @@ def run_tls_Nplanets(ts, pltt=True):
     ts.star.Ms, ts.star.Ms_min, ts.star.Ms_max, ts.star.Rs, ts.star.Rs_min, ts.star.Rs_max, ts.star.Teff = p[1:].astype(float)
     ts.star.reliable_Ms, ts.star.reliable_Rs, ts.star.reliable_Teff = np.repeat(True,3)
 
+    # check that the stellar parameters are in our desired range (very conservatively defined)
+    if (ts.star.Ms > .5) | (ts.star.Rs > .5) | (ts.star.Teff > 3800):
+        raise Exception("TIC %i does not appear to be a mid-to-late M dwarf."%ts.tic)
+
     # check that the stellar parameters are known, otherwise add a placeholder
     if np.any(np.isnan([ts.star.Ms, ts.star.Ms_max, ts.star.Ms_min])):
         ts.star.reliable_Ms = False
@@ -304,12 +315,13 @@ def vet_planets(ts):
     pv.get_POIs(ts)
     pv.vet_SDE(ts)
     pv.vet_snr(ts)   # snr<3: TOIs 2136
-    pv.vet_multiple_sectors(ts)
+    #pv.vet_multiple_sectors(ts)
     pv.vet_odd_even_difference(ts)
     pv.vet_Prot(ts)
     pv.vet_tls_Prot(ts)
-    pv.identify_conditions(ts)
+    pv.model_comparison(ts)
     #pv.plot_light_curves(ts)
+    pv.identify_conditions(ts)
     pv.save_planet_parameters(ts)
 
 

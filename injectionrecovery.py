@@ -24,12 +24,15 @@ def compile_Tmags():
     print('\nCompiling Tmag values for stars with a completed transit search...')
     ticsout, Tmags = np.zeros(N), np.zeros(N)
     for i,tic in enumerate(ticids):
+        if i % 1e2 == 0: print(i/N)
         fname = '%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic)
-        ts = loadpickle(fname)
-        if not ts.DONE:
-            continue
-        ticsout[i] = ts.tic
-        Tmags[i] = ts.star.Tmag
+        try:
+            ts = loadpickle(fname)
+            if ts.DONE and hasattr(ts.star, 'Prot_gls') and hasattr(ts.vetting, 'conditions'):
+                ticsout[i] = ts.tic
+                Tmags[i] = ts.star.Tmag
+        except:
+            pass
 
     # save
     g = ticsout > 0
@@ -44,8 +47,8 @@ def run_full_injection_recovery(Tmagmin, Tmagmax, use_20sec=False, overwrite=Fal
     injrec = get_injrec_object(Tmagmin, Tmagmax)
     df = pd.read_csv(Tmagfname)
     g = (df['Tmag'] >= injrec.Tmagmin) & (df['Tmag'] <= injrec.Tmagmax)
-    #injrec.tics, injrec.Tmags = np.ascontiguousarray(df['TIC'][g]), np.ascontiguousarray(df['Tmag'][g])
-    assert injrec.tics.size > 0
+    injrec.tics_unique = np.ascontiguousarray(df['TIC'][g])
+    assert injrec.tics_unique.size > 0
 
     # do injection-recovery
     kwargs = {'N1': int(N1), 'N2': int(N2), 'pltt': True, 'overwrite': overwrite}
@@ -120,10 +123,10 @@ def _run_injection_recovery_iter1(injrec, N1=500):
         print('%.3f (first set)'%(i/N1))
 
         # get star
-        tic = np.random.choice(injrec.tics)
+        tic = np.random.choice(injrec.tics_unique)
         ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
-        while not hasattr(ts.lc, 'efnorm_rescaled'):
-            tic = np.random.choice(injrec.tics)
+        while not hasattr(ts.vetting, 'conditions'):
+            tic = np.random.choice(injrec.tics_unique)
             ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
         clean_injrec_lc(injrec, ts)
         T0[i] = ts.lc.bjd[0] + dT0[i]
@@ -142,7 +145,6 @@ def _run_injection_recovery_iter1(injrec, N1=500):
         # add star stuff
         injrec_results[i,9:] = ts.star.Tmag, ts.star.Teff, ts.star.Rs, ts.star.Ms
 
-
     # compute sensitivity vs snr
     snr_grid_big = np.arange(0,30)
     snr_grid = snr_grid_big[1:] - np.diff(snr_grid_big)[0]/2
@@ -152,18 +154,18 @@ def _run_injection_recovery_iter1(injrec, N1=500):
         sens_gridv1[i] = injrec_results[g,8].sum()/g.sum() if g.sum() > 0 else np.nan
     
     # compute sensitivity vs sde
-    sde_grid_big = np.arange(0,50)
-    sde_grid = sde_grid_big[1:] - np.diff(sde_grid_big)[0]/2
-    sens_gridv2 = np.zeros(sde_grid.size)
-    for i in range(sde_grid.size):
-        g = (sde > sde_grid_big[i]) & (sde <= sde_grid_big[i+1])
-        sens_gridv2[i] = injrec_results[g,8].sum()/g.sum() if g.sum() > 0 else np.nan
+    #sde_grid_big = np.arange(0,50)
+    #sde_grid = sde_grid_big[1:] - np.diff(sde_grid_big)[0]/2
+    #sens_gridv2 = np.zeros(sde_grid.size)
+    #for i in range(sde_grid.size):
+    #    g = (sde > sde_grid_big[i]) & (sde <= sde_grid_big[i+1])
+    #    sens_gridv2[i] = injrec_results[g,8].sum()/g.sum() if g.sum() > 0 else np.nan
 
     # fit the sensitivity curve with a Gamma CDF
-    g = np.isfinite(sens_gridv2)
-    popt,_ = curve_fit(_gammaCDF, sde_grid[g], sens_gridv2[g], p0=[15,.5])
-    sde_model = np.linspace(0,np.nanmax(sde),1000)
-    sens_modelv2 = _gammaCDF(sde_model, *popt)   
+    #g = np.isfinite(sens_gridv2)
+    #popt,_ = curve_fit(_gammaCDF, sde_grid[g], sens_gridv2[g], p0=[15,.5])
+    #sde_model = np.linspace(0,np.nanmax(sde),1000)
+    #sens_modelv2 = _gammaCDF(sde_model, *popt)   
    
     # recompute sensitivity vs snr
     for i in range(snr_grid.size):
@@ -171,25 +173,24 @@ def _run_injection_recovery_iter1(injrec, N1=500):
         sens_gridv1[i] = injrec_results[g,8].sum()/g.sum() if g.sum() > 0 else np.nan
 
     # recompute sensitivity vs sde
-    for i in range(sde_grid.size):
-        g = (injrec_results[:,7] > sde_grid_big[i]) & (injrec_results[:,7] <= sde_grid_big[i+1])
-        sens_gridv2[i] = injrec_results[g,8].sum()/g.sum() if g.sum() > 0 else np.nan
+    #for i in range(sde_grid.size):
+    #    g = (injrec_results[:,7] > sde_grid_big[i]) & (injrec_results[:,7] <= sde_grid_big[i+1])
+    #    sens_gridv2[i] = injrec_results[g,8].sum()/g.sum() if g.sum() > 0 else np.nan
 
-    # fit the sensitivity curve with a Gamma CDF
-    injrec.snr_grid, injrec.sens_snr_grid = snr_grid, sens_gridv1
-    injrec.snr_grid_big = snr_grid_big
-    injrec.sde_grid, injrec.sens_sde_grid = sde_grid, sens_gridv2
-    injrec.sde_grid_big = sde_grid_big
+    #injrec.snr_grid, injrec.sens_snr_grid = snr_grid, sens_gridv1
+    #injrec.snr_grid_big = snr_grid_big
+    #injrec.sde_grid, injrec.sens_sde_grid = sde_grid, sens_gridv2
+    #injrec.sde_grid_big = sde_grid_big
 
     g = np.isfinite(sens_gridv1)
     injrec.popt_snr,_ = curve_fit(_gammaCDF, snr_grid[g], sens_gridv1[g], p0=[15,.5])
-    injrec.snr_model = np.linspace(0,np.nanmax(snr),1000)
-    injrec.sens_snr_model = _gammaCDF(injrec.snr_model, *injrec.popt_snr)
+    #injrec.snr_model = np.linspace(0,np.nanmax(snr),1000)
+    #injrec.sens_snr_model = _gammaCDF(injrec.snr_model, *injrec.popt_snr)
 
-    g = np.isfinite(sens_gridv2)
-    injrec.popt_sde,_ = curve_fit(_gammaCDF, sde_grid[g], sens_gridv2[g], p0=[15,.5])
-    injrec.sde_model = np.linspace(0,np.nanmax(sde),1000)
-    injrec.sens_sde_model = _gammaCDF(injrec.sde_model, *injrec.popt_sde)
+    #g = np.isfinite(sens_gridv2)
+    #injrec.popt_sde,_ = curve_fit(_gammaCDF, sde_grid[g], sens_gridv2[g], p0=[15,.5])
+    #injrec.sde_model = np.linspace(0,np.nanmax(sde),1000)
+    #injrec.sens_sde_model = _gammaCDF(injrec.sde_model, *injrec.popt_sde)
 
     # save results
     injrec.injrec_results = injrec_results
@@ -211,10 +212,10 @@ def _run_injection_recovery_iter2(injrec, N2=500, pltt=True):
         print('%.3f (second set)'%(i/N2))
 
         # get star
-        tic = np.random.choice(injrec.tics)
+        tic = np.random.choice(injrec.tics_unique)
         ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
-        while not hasattr(ts.lc, 'efnorm_rescaled'):
-            tic = np.random.choice(injrec.tics)
+        while not hasattr(ts.vetting, 'conditions'):
+            tic = np.random.choice(injrec.tics_unique)
             ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
         clean_injrec_lc(injrec, ts)
 
@@ -240,38 +241,37 @@ def _run_injection_recovery_iter2(injrec, N2=500, pltt=True):
     injrec_results = np.vstack([injrec.injrec_results, injrec_resultsv2])
     
     # recompute sensitivity vs snr
-    snr_grid, snr_grid_big = injrec.snr_grid, injrec.snr_grid_big
-    sens_gridv1 = np.zeros_like(snr_grid)
-    for i in range(snr_grid.size):
-        g = (injrec_results[:,6] > snr_grid_big[i]) & (injrec_results[:,6] <= snr_grid_big[i+1])
-        sens_gridv1[i] = injrec_results[g,8].sum()/g.sum() if g.sum() > 0 else np.nan
+    #snr_grid, snr_grid_big = injrec.snr_grid, injrec.snr_grid_big
+    #sens_gridv1 = np.zeros_like(snr_grid)
+    #for i in range(snr_grid.size):
+    #    g = (injrec_results[:,6] > snr_grid_big[i]) & (injrec_results[:,6] <= snr_grid_big[i+1])
+    #    sens_gridv1[i] = injrec_results[g,8].sum()/g.sum() if g.sum() > 0 else np.nan
     
     # recompute sensitivity vs sde
-    sde_grid, sde_grid_big = injrec.sde_grid, injrec.sde_grid_big
-    sens_gridv2 = np.zeros_like(sde_grid)
-    for i in range(sde_grid.size):
-        g = (injrec_results[:,7] > sde_grid_big[i]) & (injrec_results[:,7] <= sde_grid_big[i+1])
-        sens_gridv2[i] = injrec_results[g,8].sum()/g.sum() if g.sum() > 0 else np.nan
+    #sde_grid, sde_grid_big = injrec.sde_grid, injrec.sde_grid_big
+    #sens_gridv2 = np.zeros_like(sde_grid)
+    #for i in range(sde_grid.size):
+    #    g = (injrec_results[:,7] > sde_grid_big[i]) & (injrec_results[:,7] <= sde_grid_big[i+1])
+    #    sens_gridv2[i] = injrec_results[g,8].sum()/g.sum() if g.sum() > 0 else np.nan
 
     # fit the sensitivity curve with a Gamma CDF
-    injrec.snr_grid, injrec.sens_snr_grid = snr_grid, sens_gridv1
-    injrec.snr_grid_big = snr_grid_big
-    injrec.sde_grid, injrec.sens_sde_grid = sde_grid, sens_gridv2
-    injrec.sde_grid_big = sde_grid_big
+    #injrec.snr_grid, injrec.sens_snr_grid = snr_grid, sens_gridv1
+    #injrec.snr_grid_big = snr_grid_big
+    #injrec.sde_grid, injrec.sens_sde_grid = sde_grid, sens_gridv2
+    #injrec.sde_grid_big = sde_grid_big
 
-    g = np.isfinite(sens_gridv1)
-    injrec.popt_snr,_ = curve_fit(_gammaCDF, snr_grid[g], sens_gridv1[g], p0=[15,.5])
-    injrec.snr_model = np.linspace(0,np.nanmax(snr),1000)
-    injrec.sens_snr_model = _gammaCDF(injrec.snr_model, *injrec.popt_snr)
+    #g = np.isfinite(sens_gridv1)
+    #injrec.popt_snr,_ = curve_fit(_gammaCDF, snr_grid[g], sens_gridv1[g], p0=[15,.5])
+    #injrec.snr_model = np.linspace(0,np.nanmax(snr),1000)
+    #injrec.sens_snr_model = _gammaCDF(injrec.snr_model, *injrec.popt_snr)
 
-    g = np.isfinite(sens_gridv2)
-    injrec.popt_sde,_ = curve_fit(_gammaCDF, sde_grid[g], sens_gridv2[g], p0=[15,.5])
-    injrec.sde_model = np.linspace(0,np.nanmax(sde),1000)
-    injrec.sens_sde_model = _gammaCDF(injrec.sde_model, *injrec.popt_sde)
+    #g = np.isfinite(sens_gridv2)
+    #injrec.popt_sde,_ = curve_fit(_gammaCDF, sde_grid[g], sens_gridv2[g], p0=[15,.5])
+    #injrec.sde_model = np.linspace(0,np.nanmax(sde),1000)
+    #injrec.sens_sde_model = _gammaCDF(injrec.sde_model, *injrec.popt_sde)
 
     # save results
     injrec.tics, injrec.Ps, injrec.Fs, injrec.T0s, injrec.Rps, injrec.bs, injrec.snrs, injrec.sdes, injrec.recovered, injrec.Tmags, injrec.Teffs, injrec.Rss, injrec.Mss = injrec_results.T
-    delattr(injrec, 'injrec_results')
     injrec.DONE = True
 
     # delete old stuff 
@@ -279,15 +279,15 @@ def _run_injection_recovery_iter2(injrec, N2=500, pltt=True):
         delattr(injrec, s)
 
     # save sens vs S/N plot
-    if pltt:
-        plt.figure(figsize=(8,4))
-        plt.step(injrec.sde_grid, injrec.sens_sde_grid, 'k-', lw=3)
-        plt.plot(injrec.sde_model, injrec.sens_sde_model, '-', lw=2)
-        plt.title('TIC %i'%ts.tic, fontsize=12)
-        plt.ylabel('CDF', fontsize=12)
-        plt.xlabel('S/N', fontsize=12)
-        plt.savefig(('%s/MAST/TESS/senscurve_Tmag_%.2f_%.2f'%(cs.repo_dir, injrec.Tmagmin, injrec.Tmagmax)).replace('.','d')+'.png')
-        plt.close('all')
+    #if pltt:
+    #    plt.figure(figsize=(8,4))
+    #    plt.step(injrec.sde_grid, injrec.sens_sde_grid, 'k-', lw=3)
+    #    plt.plot(injrec.sde_model, injrec.sens_sde_model, '-', lw=2)
+    #    plt.title('TIC %i'%ts.tic, fontsize=12)
+    #    plt.ylabel('CDF', fontsize=12)
+    #    plt.xlabel('S/N', fontsize=12)
+    #    plt.savefig(('%s/MAST/TESS/senscurve_Tmag_%.2f_%.2f'%(cs.repo_dir, injrec.Tmagmin, injrec.Tmagmax)).replace('.','d')+'.png')
+    #    plt.close('all')
 
 
 
@@ -411,16 +411,23 @@ def run_tls_Nplanets(injrec, ts, Nmax=3, rtol=0.02):
         results_raw = run_tls(*lc_input_raw, ts.star.ab, period_max=float(Pmax))
         results = run_tls(*lc_input, ts.star.ab, period_max=float(Pmax))
 
-        # get highest peaks in the TLS of the null light curve
-        g = results_raw['power'] >= 0  # TEMP??
-        s = np.argsort(results_raw['power'][g])[::-1]
-        Psrec_raw = results_raw['periods'][g][s][:int(Nmax)]
+        # get highest peaks in the TLS of the null light curve (excluding PCs)
+        mask = np.ones_like(results_raw['power']).astype(bool)
+        mask[results_raw['power'] < 0] = False
+        for p in ts.vetting.POIs[ts.vetting.conditions == 0]:
+            mask[np.isclose(results_raw['periods'], p, rtol=.02)] = False
+        s = np.argsort(results_raw['power'][mask])[::-1]
+        g = abs(np.diff(s)) > 5
+        Psrec_raw = results_raw['periods'][mask][s[:-1][g][:int(Nmax)]]
 
         # get highest peaks in the TLS
-        ##g = results['power'] >= cs.SDEthreshold
-        g = results['power'] >= 0  # TEMP??
-        s = np.argsort(results['power'][g])[::-1]
-        Psrec = results['periods'][g][s][:int(Nmax)]
+        mask = np.ones_like(results['power']).astype(bool)
+        mask[results['power'] < 0] = False
+        for p in ts.vetting.POIs[ts.vetting.conditions == 0]:
+            mask[np.isclose(results['periods'], p, rtol=.02)] = False
+        s = np.argsort(results['power'][mask])[::-1]
+        g = abs(np.diff(s)) > 5
+        Psrec = results['periods'][mask][s[:-1][g][:int(Nmax)]]
 
         # check if the planet is recovered
         g = np.isclose(results['periods'], injrec.argsinjected[0], rtol=.05)
@@ -468,7 +475,7 @@ def is_planet_detected(ts, thetainj, Psrec, Psrec_raw, rtol=.02):
     for j in range(1,5):
         Ppeaks.append(Pinj*j)
         Ppeaks.append(Pinj/j)
-    Ppeaks = np.sort(Ppeaks)
+    Ppeaks = np.sort(np.unique(Ppeaks))
 
     # get rotation periods and harmonics to reject
     Prots = []
@@ -479,7 +486,12 @@ def is_planet_detected(ts, thetainj, Psrec, Psrec_raw, rtol=.02):
     # check if there is a peak in the TLS that is not close to rotation
     is_detected = False
     for p in Psrec:
-        is_detected += np.any((np.isclose(Ppeaks, p, rtol=rtol))) & np.all(np.invert(np.isclose(Prots, p, rtol=rtol))) & np.all(np.invert(np.isclose(Psrec_raw, p, rtol=rtol))) & (snrinj >= 2) & (sdeinj >= cs.SDEthreshold) & (vet_Prot_injrec(ts, p))
+        is_detected += np.any((np.isclose(Ppeaks, p, rtol=rtol))) & \
+                       np.all(np.invert(np.isclose(Prots, p, rtol=rtol))) & \
+                       np.all(np.invert(np.isclose(Psrec_raw, p, rtol=rtol))) & \
+                       (snrinj >= cs.SNRthreshold) & \
+                       (sdeinj >= cs.SDEthreshold) & \
+                       (vet_Prot_injrec(ts, p))
 
     return is_detected
 

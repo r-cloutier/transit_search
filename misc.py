@@ -99,6 +99,18 @@ def compute_insolation(Teff, Rs, Ms, P):
     return F
 
 
+def lnlike(y, ey, model):
+    assert np.all(np.isfinite(np.ascontiguousarray(ey)))
+    return -.5 * np.nansum((y-model)**2 / ey**2)
+
+
+def dBIC(y, ey, model):
+    '''Transit model (from the TLS) vs the null model (i.e. a flat line)'''
+    BIC_transit = 5*np.log(y.size) - 2*lnlike(y, ey, model)   # theta = {P,T0,D,Z,baseline}
+    BIC_null = 1*np.log(y.size) - 2*lnlike(y, ey, np.ones_like(model))
+    return BIC_transit, BIC_null
+
+
 def bin_lc(x_fold, y, bin_width_min=60):
     bins = np.arange(x_fold.min(), x_fold.max(), bin_width_min/1440)
     denom, _ = np.histogram(x_fold, bins)

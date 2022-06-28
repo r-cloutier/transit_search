@@ -27,3 +27,8 @@ sensitivity_analysis.ipynb
 compute_sensitivity.py
 injectionrecoveryORIG.py
 vetting_flags.txt
+/paper
+SDEthresh*
+planet_candidate*.ipynb
+CHANGE*py
+FLAG*py
