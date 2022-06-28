@@ -8,28 +8,31 @@ import misc, pdb
 
 MAD = lambda arr: np.nanmedian(abs(arr - np.nanmedian(arr)))
 
-def get_POIs(ts):
+def get_POIs(ts, injrec=False):
     '''
     Given a set of tls result dictionaries (i.e. from multiple TLS runs and/or
     multiple sectors), consolidate periods of interest. 
 
-    Behaviour is slightly different betweent the planet search and vetting of 
+    Behaviour is slightly different between the planet search and vetting of 
     injected planets.
     '''
+    # planet search for injrec?
+    tlsobj = ts.injrec if injrec else ts.tls
+    
     # collect all periods
     POIsv1 = np.zeros((0,11)) 
-    for res in ts.tls.__dict__.keys():
-        POIsv1 = np.vstack([POIsv1, [getattr(ts.tls,res).period,
-                                     getattr(ts.tls,res).T0,
-                                     getattr(ts.tls,res).duration*24,
-                                     1e3*(1-getattr(ts.tls,res).depth),
-                                     getattr(ts.tls,res).rp_rs,
-                                     getattr(ts.tls,res).chi2_min,
-                                     getattr(ts.tls,res).chi2red_min,
-                                     getattr(ts.tls,res).SDE_raw,
-                                     getattr(ts.tls,res).SDE,
-                                     getattr(ts.tls,res).snr,
-                                     getattr(ts.tls,res).odd_even_mismatch]])
+    for res in tlsobj.__dict__.keys():
+        POIsv1 = np.vstack([POIsv1, [getattr(tlsobj,res).period,
+                                     getattr(tlsobj,res).T0,
+                                     getattr(tlsobj,res).duration*24,
+                                     1e3*(1-getattr(tlsobj,res).depth),
+                                     getattr(tlsobj,res).rp_rs,
+                                     getattr(tlsobj,res).chi2_min,
+                                     getattr(tlsobj,res).chi2red_min,
+                                     getattr(tlsobj,res).SDE_raw,
+                                     getattr(tlsobj,res).SDE,
+                                     getattr(tlsobj,res).snr,
+                                     getattr(tlsobj,res).odd_even_mismatch]])
     POIsv1 = POIsv1[np.argsort(POIsv1,0)[:,0]]
     
     # identify duplicates
@@ -58,49 +61,59 @@ def get_POIs(ts):
     
     # leave multiples alone because if they surive the iterative TLS,
     # they may be real (e.g. L 98-59)
-    ts.vetting.POIs,ts.vetting.T0OIs,ts.vetting.DOIs,ts.vetting.ZOIs,ts.vetting.rpRsOIs,ts.vetting.chi2minOIs,ts.vetting.chi2redminOIs,ts.vetting.SDErawOIs,ts.vetting.SDEOIs,ts.vetting.snrOIs,ts.vetting.oddevendiff_sigma,ts.vetting.NoccurrencesOIs = POIsv3.T
-    ts.vetting.vetting_mask = np.ones(POIsv3.shape[0]).astype(bool)
-    ts.vetting.conditions = np.zeros(POIsv3.shape[0])
+    # save parameters for each OI
+    vetobj = ts.injrec.vetting if injrec else ts.vetting
+    for i,s in enumerate(['POIs','T0OIs','DOIs','ZOIs','rpRsOIs','chi2minOIs','chi2redminOIs','SDErawOIs','SDEOIs','snrOIs','oddevendiff_sigma','NoccurrencesOIs']):
+        setattr(vetobj, s, POIsv3[:,i])
+
+    vetobj.vetting_mask = np.ones(POIsv3.shape[0]).astype(bool)
+    vetobj.conditions = np.zeros(POIsv3.shape[0])
+
+    
+
+def vet_SDE(ts, injrec=False):
+    vetobj = ts.injrec.vetting if injrec else ts.vetting
+    g = vetobj.SDEOIs >= cs.SDEthreshold
+    vetobj.vetting_mask *= g
+    vetobj.conditions[np.invert(g)] += 1  # condition1
 
 
-def vet_SDE(ts):
-    g = ts.vetting.SDEOIs >= cs.SDEthreshold
-    ts.vetting.vetting_mask *= g
-    ts.vetting.conditions[np.invert(g)] += 1  # condition1
+def vet_snr(ts, injrec=False):
+    vetobj = ts.injrec.vetting if injrec else ts.vetting
+    g = vetobj.snrOIs >= cs.SNRthreshold
+    vetobj.vetting_mask *= g
+    vetobj.conditions[np.invert(g)] += 2 # condition2
 
 
-def vet_snr(ts):
-    g = ts.vetting.snrOIs >= cs.SNRthreshold
-    ts.vetting.vetting_mask *= g
-    ts.vetting.conditions[np.invert(g)] += 2 # condition2
-
-
-def vet_multiple_sectors(ts):
+def vet_multiple_sectors(ts, injrec=False):
     '''
     If multiple sectors have been observed, vet planets that were not recovered
     in multiple sectors. 
     '''
+    vetobj = ts.injrec.vetting if injrec else ts.vetting
     if ts.lc.Nsect <= 1:
         pass
     else:
-        g = ts.vetting.NoccurrencesOIs > 1
-        ts.vetting.vetting_mask *= g
-        ts.vetting.conditions[np.invert(g)] += 4  # condition4
+        g = vetobj.NoccurrencesOIs > 1
+        vetobj.vetting_mask *= g
+        vetobj.conditions[np.invert(g)] += 4  # condition4
 
         
-def vet_odd_even_difference(ts):
+def vet_odd_even_difference(ts, injrec=False):
     '''
     Check for a significant odd-even difference in the transit depths.
     '''
-    g = ts.vetting.oddevendiff_sigma < 3
-    ts.vetting.vetting_mask *= g
-    ts.vetting.conditions[np.invert(g)] += 8  # condition8
+    vetobj = ts.injrec.vetting if injrec else ts.vetting
+    g = vetobj.oddevendiff_sigma < 3
+    vetobj.vetting_mask *= g
+    vetobj.conditions[np.invert(g)] += 8  # condition8
 
 
-def vet_Prot(ts, rtol=0.02):
+def vet_Prot(ts, rtol=0.02, injrec=False):
     '''
     Check that the planet candidate is not close to Prot or a harmonic.
     '''
+    vetobj = ts.injrec.vetting if injrec else ts.vetting
     # get rotation periods and harmonics to reject
     Prots = []
     for j in range(1,4):
@@ -108,19 +121,20 @@ def vet_Prot(ts, rtol=0.02):
     Prots = np.sort(Prots)
 
     # check each POI
-    for i,p in enumerate(ts.vetting.POIs):
+    for i,p in enumerate(vetobj.POIs):
         g = np.all(np.invert(np.isclose(Prots, p, rtol=rtol)))
-        ts.vetting.vetting_mask[i] *= g
-        if not g: ts.vetting.conditions[i] += 16  # condition16
+        vetobj.vetting_mask[i] *= g
+        if not g: vetobj.conditions[i] += 16  # condition16
 
 
 
-def vet_tls_Prot(ts, rtol=0.02, sig=3):
+def vet_tls_Prot(ts, rtol=0.02, sig=3, injrec=False):
     '''
     Check that the tls did not likely return a rotation signature, which can happen if the gls 
     fails to flag stellar rotation.
     '''
-    for i,p in enumerate(ts.vetting.POIs):
+    vetobj = ts.injrec.vetting if injrec else ts.vetting
+    for i,p in enumerate(vetobj.POIs):
         rotation_signature = []
         for k in ts.tls.__dict__.keys():
             per, pwr = getattr(ts.tls,k).periods, getattr(ts.tls,k).power
@@ -135,22 +149,23 @@ def vet_tls_Prot(ts, rtol=0.02, sig=3):
                     is_harmonic_significant[n-1] = False
             g = np.all(is_harmonic_significant) and np.all(is_harmonic_decreasing)    # false POI if all the harmonics have significant peaks and show decreasing pwr with increasing period
             rotation_signature.append(g)
-        ts.vetting.vetting_mask[i] *= np.sum(rotation_signature)/len(rotation_signature) <= .5  # need at least half of sectors to favour rotation
+        vetobj.vetting_mask[i] *= np.sum(rotation_signature)/len(rotation_signature) <= .5  # need at least half of sectors to favour rotation
         
         # save the tls-recovered period if found
         if np.sum(rotation_signature)/len(rotation_signature) >= .5: 
-            ts.vetting.conditions[i] += 32  # condition32
+            vetobj.conditions[i] += 32  # condition32
             ts.star.Prot_tls = p
         elif not hasattr(ts.star,'Prot_tls'):
             ts.star.Prot_tls = np.nan
 
 
-def model_comparison(ts):
+def model_comparison(ts, injrec=False):
     '''
     In each sector that each PC is found in, check that the delta BIC favours 
     the transit model over the null hypothesis (i.e. a flat line).
     '''
-    for i,p in enumerate(ts.vetting.POIs):
+    vetobj = ts.injrec.vetting if injrec else ts.vetting
+    for i,p in enumerate(vetobj.POIs):
         dBIC_vetted = []  # if True, then transit model is favoured by the dBIC
         for k in ts.tls.__dict__.keys():
             # get tls results
@@ -169,8 +184,8 @@ def model_comparison(ts):
 
         # does each sector favour this PC's transit model?
         g = np.all(dBIC_vetted)
-        ts.vetting.vetting_mask[i] *= g
-        if not g: ts.vetting.conditions[i] += 64  # condition64
+        vetobj.vetting_mask[i] *= g
+        if not g: vetobj.conditions[i] += 64  # condition64
 
  
 def plot_light_curves(ts):
@@ -215,24 +230,25 @@ def plot_light_curves(ts):
             continue
             
 
-def identify_conditions(ts):
+def identify_conditions(ts, injrec=False):
     '''Given the base 2 condition flags, identify the individual flags.'''
-    ts.vetting.conditions_indiv = []
+    vetobj = ts.injrec.vetting if injrec else ts.vetting
+    vetobj.conditions_indiv = []
 
-    for i,c in enumerate(ts.vetting.conditions):
+    for i,c in enumerate(vetobj.conditions):
         v = []
         while (c > 0): 
             v.append(int(c % 2)) 
             c = int(c / 2)
         # list of individual flags for each OI
-        ts.vetting.conditions_indiv.append(list(2**np.where(v)[0]))
+        vetobj.conditions_indiv.append(list(2**np.where(v)[0]))
 
     # save parameter definitions
     p = np.genfromtxt('/n/home10/rcloutier/TLS/vetting_flags.txt', delimiter=',', dtype='|S70')
     flags, labels = p[:,0].astype(int), p[:,1].astype(str)
-    ts.vetting.conditions_defs = {}
+    vetobj.conditions_defs = {}
     for i,f in enumerate(flags):
-        ts.vetting.conditions_defs[f] = labels[i]
+        vetobj.conditions_defs[f] = labels[i]
 
 
 def save_planet_parameters(ts):
