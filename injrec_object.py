@@ -17,8 +17,12 @@ class injection_recovery:
         dir_full = '%s/MAST/TESS'%cs.repo_dir
         assert os.path.exists(dir_full)
         self.fname_full = '%s/%s'%(dir_full, fname)
+        self.FP = FalsePositives()
 
     def pickleobject(self):
         fObj = open(self.fname_full, 'wb')
         pickle.dump(self, fObj)
         fObj.close()
+
+    class FalsePositives:
+        pass
