@@ -41,8 +41,12 @@ class transit_search:
         pass
     class VETTING:
         pass
+
     class INJREC:
         def __init__(self):
+            self.tls = self.TLS()
             self.vetting = self.VETTING()
+        class TLS:
+            pass
         class VETTING:
             pass

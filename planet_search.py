@@ -246,7 +246,7 @@ def run_tls_Nplanets(ts, pltt=True):
         lc_input = ts.lc.bjd[g], ts.lc.fdetrend[g], ts.lc.efnorm_rescaled[g]
         slabel = '%i'%s[0] if len(s) == 1 else '%i-%i'%(min(s),max(s))
 
-        # get maximum period for 2 transits on average
+        # get maximum period for Nmin transits on average
         Pmax,_,_ = dtg.get_Ntransit_vs_period(ts.tic, ts.lc.bjd[g], ts.lc.sectors[g], pltt=False)
 
         # run tls on this sector

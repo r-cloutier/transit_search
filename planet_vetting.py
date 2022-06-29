@@ -17,7 +17,7 @@ def get_POIs(ts, injrec=False):
     injected planets.
     '''
     # planet search for injrec?
-    tlsobj = ts.injrec if injrec else ts.tls
+    tlsobj = ts.injrec.tls if injrec else ts.tls
     
     # collect all periods
     POIsv1 = np.zeros((0,11)) 
