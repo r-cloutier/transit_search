@@ -3,7 +3,6 @@ import pylab as plt
 from scipy.interpolate import interp1d
 import pandas as pd
 import constants as cs
-from injectionrecovery import transit_model
 import misc, pdb
 
 MAD = lambda arr: np.nanmedian(abs(arr - np.nanmedian(arr)))

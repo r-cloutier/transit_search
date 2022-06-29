@@ -83,10 +83,14 @@ def _run_injection_recovery_iter1(injrec, N1=500):
         tic = np.random.choice(injrec.tics_unique)
         ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
         count = 0
-        while not hasattr(ts, 'DONEcheck_version'):
+        #while not hasattr(ts, 'DONEcheck_version'): TEMP
+        while not hasattr(ts.vetting, 'conditions'):
             tic = np.random.choice(injrec.tics_unique)
             ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
-            count = count+1 if count < 1000 else raise ValueError('No TIC is available.')
+            if count < 1000:
+                count += 1
+            else:
+                raise ValueError('No TIC is available.')
 
         # save stellar paramaters
         flux_err = np.nanmedian(ts.lc.efnorm_rescaled)
@@ -104,7 +108,7 @@ def _run_injection_recovery_iter1(injrec, N1=500):
         inject_custom_planet(injrec, ts, P[i], Rp[i], b=b[i], T0=T0[i])
         
         # run TLS
-        print('\nRunning injection-recovery on TIC %i (P=%.3f days, F=%.1f FEarth, T0=%.3f, Rp=%.2f REarth, b=%.2f, S/N=%.1f)'%tuple(injrec_results[i,:7]))
+        print('\nRunning injection-recovery on TIC %i (P=%.3f days, F=%.1f FEarth, T0=%.3f, Rp=%.2f REarth, b=%.2f, S/N=%.1f)'%tuple(np.append(tic,injrec_results[i,6:12])))
         det, sde[i], FPdict = run_tls_Nplanets(injrec, ts)
         injrec_results[i,12:] = sde[i], det
 
@@ -126,7 +130,7 @@ def _run_injection_recovery_iter1(injrec, N1=500):
 
     # save results
     injrec.injrec_results = injrec_results
-    injrec.FP.FP_results = FP_results
+    injrec.fp.FP_results = FP_results
     injrec.DONE1 = True
 
 
@@ -151,10 +155,14 @@ def _run_injection_recovery_iter2(injrec, N2=500):
         tic = np.random.choice(injrec.tics_unique)
         ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
         count = 0
+        #while not hasattr(ts, 'DONEcheck_version'): TEMP
         while not hasattr(ts.vetting, 'conditions'):
             tic = np.random.choice(injrec.tics_unique)
             ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
-            count = count+1 if count < 1000 else raise ValueError('No TIC is available.')
+            if count < 1000:
+                count += 1
+            else:
+                raise ValueError('No TIC is available.')
 
         # save stellar paramaters
         flux_err = np.nanmedian(ts.lc.efnorm_rescaled)
@@ -173,7 +181,7 @@ def _run_injection_recovery_iter2(injrec, N2=500):
         inject_custom_planet(injrec, ts, P[i], Rp[i], b=b[i], T0=T0[i])
         
         # run TLS
-        print('\nRunning injection-recovery on TIC %i (P=%.3f days, F=%.1f FEarth, T0=%.3f, Rp=%.2f REarth, b=%.2f, S/N=%.1f)'%tuple(injrec_resultsv2[i,:7]))
+        print('\nRunning injection-recovery on TIC %i (P=%.3f days, F=%.1f FEarth, T0=%.3f, Rp=%.2f REarth, b=%.2f, S/N=%.1f)'%tuple(np.append(tic,injrec_resultsv2[i,6:12])))
         det, sde[i], FPdict = run_tls_Nplanets(injrec, ts)
         injrec_resultsv2[i,12:] = sde[i], det
 
@@ -185,7 +193,7 @@ def _run_injection_recovery_iter2(injrec, N2=500):
         
     # combine results from iter1 and iter2
     injrec_results = np.vstack([injrec.injrec_results, injrec_resultsv2])
-    FP_results = np.vstack([injrec.FP.FP_results, FP_resultsv2])
+    FP_results = np.vstack([injrec.fp.FP_results, FP_resultsv2])
 
     # save results
     for i,s in enumerate(['tics','Mss','Rss','Teffs','Tmags','efluxes','Ps','Fs','T0s','Rps','bs','snrs','sdes','recovered']):
@@ -193,10 +201,10 @@ def _run_injection_recovery_iter2(injrec, N2=500):
         
     # save FP results
     for i,k in enumerate(np.sort(list(FPdict.keys()))):
-        setattr(injrec.FP, '%sFPs'%k, FP_results[:,i])
+        setattr(injrec.fp, '%sFPs'%k, FP_results[:,i])
         
     # delete old stuff
-    delattr(injrec.FP, 'FP_results')
+    delattr(injrec.fp, 'FP_results')
     for s in ['injrec_results','argsinjected','bjd','fclean','finjected','efnorm','efnorm_rescaled','injected_model','sect_ranges','sectors']:
         try:
             delattr(injrec, s)
@@ -340,13 +348,13 @@ def run_tls_Nplanets(injrec, ts, Nmax=3, rtol=0.02):
         # identify FP signals
         FPmask = ts.injrec.vetting.FP_mask and ts.injrec.vetting.vetting_mask
         FPdict = {'P': ts.injrec.vetting.POIs[FPmask],
-                  'T0': ts.vetting.vetting.T0OIs[FPmask],
-                  'D': ts.vetting.vetting.DOIs[FPmask],
-                  'Z': ts.vetting.vetting.ZOIs[FPmask],
-                  'rpRs': ts.vetting.vetting.rpRsOIs[FPmask],
-                  'SDEraw': ts.vetting.vetting.SDErawOIs[FPmask],
-                  'SDE': ts.vetting.vetting.SDEOIs[FPmask],
-                  'snr': ts.vetting.vetting.snrOIs[FPmask],
+                  'T0': ts.injrec.vetting.T0OIs[FPmask],
+                  'D': ts.injrec.vetting.DOIs[FPmask],
+                  'Z': ts.injrec.vetting.ZOIs[FPmask],
+                  'rpRs': ts.injrec.vetting.rpRsOIs[FPmask],
+                  'SDEraw': ts.injrec.vetting.SDErawOIs[FPmask],
+                  'SDE': ts.injrec.vetting.SDEOIs[FPmask],
+                  'snr': ts.injrec.vetting.snrOIs[FPmask],
                   'efluxes': np.nanmedian(ts.lc.efnorm_rescaled)}
         
         return is_detected, sde, FPdict
@@ -508,7 +516,8 @@ def compile_Tmags():
         fname = '%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic)
         try:
             ts = loadpickle(fname)
-            if ts.DONE and hasattr(ts.star, 'Prot_gls') and hasattr(ts.vetting, 'conditions'):
+            #if ts.DONE and hasattr(ts, 'DONEcheck_version'): TEMP
+            if ts.DONE and hasattr(ts.vetting, 'conditions'):
                 ticsout[i] = ts.tic
                 Tmags[i] = ts.star.Tmag
         except:
