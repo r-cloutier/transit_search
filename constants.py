@@ -1,4 +1,4 @@
-global t0, plot_dir, minsector, maxsector, P_duplicate_fraction, Ntransits_min, Nplanets_max, SNRthreshold, SDEthreshold, Pgrid, Rpgrid, bgrid, DONEcheck_version
+global t0, plot_dir, minsector, maxsector, P_duplicate_fraction, Ntransits_min, Nplanets_max, SDEthreshold, Pgrid, Rpgrid, bgrid, DONEcheck_version
   
 # time offset for plotting
 t0 = 2457e3
@@ -22,7 +22,6 @@ Ntransits_min = 3
 Nplanets_max = 3
 
 # stop the TLS search when the max SDE value is less than this value
-SNRthreshold = 0
 SDEthreshold = 5
 
 # minimum power in Gls to assign to stellar rotation

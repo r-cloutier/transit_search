@@ -215,7 +215,6 @@ def run_tls_Nplanets(ts, pltt=True):
     (detrended) light curve.
     '''
     # get approximate stellar parameters
-    pdb.set_trace()
     p = np.ascontiguousarray(tls.catalog_info(TIC_ID=ts.tic))
     ts.star.ab = p[0]
     ts.star.Ms, ts.star.Ms_min, ts.star.Ms_max, ts.star.Rs, ts.star.Rs_min, ts.star.Rs_max, ts.star.Teff = p[1:].astype(float)

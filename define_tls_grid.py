@@ -8,7 +8,7 @@ def get_Ntransit_vs_period(tic, bjd, sectors, pltt=True):
     assert bjd.size == sectors.size
     
     # try getting periods recovered for a given lc
-    Pmax = np.arange(6,51)
+    Pmax = np.arange(1,51)
     N = 500
     sect_ranges = misc.get_consecutive_sectors(np.unique(sectors))
     Nsect = len(sect_ranges)
@@ -23,14 +23,15 @@ def get_Ntransit_vs_period(tic, bjd, sectors, pltt=True):
         for i,p in enumerate(Pmax):
             
             # for random phases
-            phis = np.random.uniform(bjd[g].min(), bjd[g].min()+Pmax.max(), N)
+            phis = np.random.uniform(bjd[g].min(), bjd[g].max(), N)
             for j,t0 in enumerate(phis):
 
                 # how many mid-transits are covered by the LC?
-                Ntransits_covered[si,i,j] = np.sum(abs(_foldAt(bjd[g],p,t0)) < .5*2/60/24/p)
+                Ntransits_covered[si,i,j] = np.sum(np.isclose(_foldAt(bjd[g],p,t0)*p, 0, atol=.5*2/60/24))
 
         # get Pmax for this sector
-        Pmax_per_sector[si] = Pmax[np.median(Ntransits_covered[si],1) >= cs.Ntransits_min][-1]
+        g = np.median(Ntransits_covered[si],1) >= cs.Ntransits_min
+        Pmax_per_sector[si] = Pmax[g][-1] if g.sum() > 0 else np.nan
 
 
     # plot
