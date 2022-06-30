@@ -73,7 +73,7 @@ def _run_injection_recovery_iter1(injrec, N1=500):
     # for every planet, run the TLS and flag planet as recovered or not
     # {tic,Ms,Rs,Teff,Tmag,fluxerr, P,F,T0,Rp,b,snr,sde, recovered}
     injrec_results = np.zeros((N1, 14))
-    FP_results = np.zeros((0, 8))
+    FP_results = np.zeros((0,9))
     T0, Fs, snr, sde = np.zeros(N1), np.zeros(N1), np.zeros(N1), np.zeros(N1)
     for i in range(N1):
 
@@ -83,8 +83,8 @@ def _run_injection_recovery_iter1(injrec, N1=500):
         tic = np.random.choice(injrec.tics_unique)
         ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
         count = 0
-        #while not hasattr(ts, 'DONEcheck_version'): TEMP
-        while not hasattr(ts.vetting, 'conditions'):
+        while not hasattr(ts, 'DONEcheck_version'):
+        ##while not hasattr(ts.vetting, 'conditions'):
             tic = np.random.choice(injrec.tics_unique)
             ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
             if count < 1000:
@@ -116,17 +116,18 @@ def _run_injection_recovery_iter1(injrec, N1=500):
         NFP = FPdict['P'].size
         for n in range(NFP):
             theta = np.array([FPdict[k][n] for k in np.sort(list(FPdict.keys()))])
-            FP_results = np.append(FP_results, theta.reshape(1,8), axis=0)
+            FP_results = np.append(FP_results, theta.reshape(1,9), axis=0)
         
     # compute sensitivity vs snr to used for weighted sampling in iter2
     injrec.snr_grid = np.arange(0,30)
+    injrec.snr_grid_v2 = injrec.snr_grid[1:] - np.diff(injrec.snr_grid)[0]/2
     injrec.sens_grid = np.zeros(injrec.snr_grid.size-1)
     for i in range(injrec.snr_grid.size-1):
         g = (snr > injrec.snr_grid[i]) & (snr <= injrec.snr_grid[i+1])
         injrec.sens_grid[i] = injrec_results[g,-1].sum()/g.sum() if g.sum() > 0 else np.nan
     
     g = np.isfinite(injrec.sens_grid)
-    injrec.popt_snr,_ = curve_fit(_gammaCDF, injrec.snr_grid[g], injrec.sens_grid[g], p0=[15,.5])
+    injrec.popt_snr,_ = curve_fit(_gammaCDF, injrec.snr_grid_v2[g], injrec.sens_grid[g], p0=[15,.5])
 
     # save results
     injrec.injrec_results = injrec_results
@@ -144,7 +145,7 @@ def _run_injection_recovery_iter2(injrec, N2=500):
     # for every planet, run the TLS and flag planet as recovered or not
     # {tic,Ms,Rs,Teff,Tmag,fluxerr, P,F,T0,Rp,b,snr,sde, recovered}
     injrec_resultsv2 = np.zeros((N2,14))
-    FP_resultsv2 = np.zeros((0, 8))
+    FP_resultsv2 = np.zeros((0,9))
     P, Rp, b = np.zeros(N2), np.zeros(N2), np.zeros(N2)
     T0, Fs, snr, sde = np.zeros(N2), np.zeros(N2), np.zeros(N2), np.zeros(N2)
     for i in range(N2):
@@ -155,8 +156,8 @@ def _run_injection_recovery_iter2(injrec, N2=500):
         tic = np.random.choice(injrec.tics_unique)
         ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
         count = 0
-        #while not hasattr(ts, 'DONEcheck_version'): TEMP
-        while not hasattr(ts.vetting, 'conditions'):
+        while not hasattr(ts, 'DONEcheck_version'):
+        ##while not hasattr(ts.vetting, 'conditions'):
             tic = np.random.choice(injrec.tics_unique)
             ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
             if count < 1000:
@@ -189,7 +190,7 @@ def _run_injection_recovery_iter2(injrec, N2=500):
         NFP = FPdict['P'].size
         for n in range(NFP):
             theta = np.array([FPdict[k][n] for k in np.sort(list(FPdict.keys()))])
-            FP_resultsv2 = np.append(FP_resultsv2, theta.reshape(1,8), axis=0)
+            FP_resultsv2 = np.append(FP_resultsv2, theta.reshape(1,9), axis=0)
         
     # combine results from iter1 and iter2
     injrec_results = np.vstack([injrec.injrec_results, injrec_resultsv2])
@@ -220,7 +221,7 @@ def sample_planets_uniform(N=1e3):
     P = 10**np.random.uniform(np.log10(cs.Pgrid[0]), np.log10(cs.Pgrid[1]), N)
     dT0 = np.random.uniform(0, P, N)
     Rp = np.random.uniform(cs.Rpgrid[0], cs.Rpgrid[1], N)
-    b = np.random.uniform(cs.bgrid[0], cs.bgrid[1], N)
+    b = abs(np.random.uniform(cs.bgrid[0], cs.bgrid[1], N))
     return P, dT0, Rp, b
         
 
@@ -234,7 +235,7 @@ def sample_planets_weighted(ts, popt_snr, N=1e3, border=0.02):
         P = 10**np.random.uniform(np.log10(cs.Pgrid[0]), np.log10(cs.Pgrid[1]), N)
         dT0 = np.random.uniform(0, P, N)
         Rp = np.random.uniform(cs.Rpgrid[0], cs.Rpgrid[1], N)
-        b = np.random.uniform(cs.bgrid[0], cs.bgrid[1], N)
+        b = abs(np.random.uniform(cs.bgrid[0], cs.bgrid[1], N))
         
         # get each planet's snr and corresponding sensitivity
         snr = misc.estimate_snr(ts, P, ts.lc.bjd[0]+dT0, Rp)
@@ -355,7 +356,7 @@ def run_tls_Nplanets(injrec, ts, Nmax=3, rtol=0.02):
                   'SDEraw': ts.injrec.vetting.SDErawOIs[FPmask],
                   'SDE': ts.injrec.vetting.SDEOIs[FPmask],
                   'snr': ts.injrec.vetting.snrOIs[FPmask],
-                  'efluxes': np.nanmedian(ts.lc.efnorm_rescaled)}
+                  'efluxes': np.repeat(np.nanmedian(ts.lc.efnorm_rescaled), ts.injrec.vetting.snrOIs.size)}
         
         return is_detected, sde, FPdict
         
@@ -435,7 +436,7 @@ def is_planet_detected(ts, Pinj, rtol=0.02):
     '''
     # also check multiples of the injected period 
     Ps_inj = []
-    for n in (1,5):
+    for j in (1,5):
         Ps_inj.append(Pinj*j)
         Ps_inj.append(Pinj/j)
     Ps_inj = np.sort(np.unique(Ps_inj))
@@ -516,8 +517,8 @@ def compile_Tmags():
         fname = '%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic)
         try:
             ts = loadpickle(fname)
-            #if ts.DONE and hasattr(ts, 'DONEcheck_version'): TEMP
-            if ts.DONE and hasattr(ts.vetting, 'conditions'):
+            if ts.DONE and hasattr(ts, 'DONEcheck_version'):
+            ##if ts.DONE and hasattr(ts.vetting, 'conditions'):
                 ticsout[i] = ts.tic
                 Tmags[i] = ts.star.Tmag
         except:
