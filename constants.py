@@ -29,8 +29,8 @@ SDEthreshold = 5
 minGlspwr = .1
 
 # define grid for injection-recovery
-Pgrid = .1, 30   # days
-Rpgrid = .1, 4   # Rearth
+Pgrid = .4, 30   # days
+Rpgrid = .5, 4   # Rearth
 bgrid = -.9, .9
 ampgrid = .1, 100  # ppt
 Protgrid = .1, 100  # days

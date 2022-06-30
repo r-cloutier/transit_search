@@ -113,7 +113,7 @@ def _run_injection_recovery_iter1(injrec, N1=500):
         injrec_results[i,12:] = sde[i], det
 
         # save FPs
-        NFP = FPdict['P'].size
+        NFP = FPdict['Ps'].size
         for n in range(NFP):
             theta = np.array([FPdict[k][n] for k in np.sort(list(FPdict.keys()))])
             FP_results = np.append(FP_results, theta.reshape(1,9), axis=0)
@@ -167,7 +167,7 @@ def _run_injection_recovery_iter2(injrec, N2=500):
 
         # save stellar paramaters
         flux_err = np.nanmedian(ts.lc.efnorm_rescaled)
-        injrec_results[i,:6] = tic, ts.star.Ms, ts.star.Rs, ts.star.Teff, ts.star.Tmag, flux_err
+        injrec_resultsv2[i,:6] = tic, ts.star.Ms, ts.star.Rs, ts.star.Teff, ts.star.Tmag, flux_err
             
         clean_injrec_lc(injrec, ts)
 
@@ -187,7 +187,7 @@ def _run_injection_recovery_iter2(injrec, N2=500):
         injrec_resultsv2[i,12:] = sde[i], det
 
         # save FPs
-        NFP = FPdict['P'].size
+        NFP = FPdict['Ps'].size
         for n in range(NFP):
             theta = np.array([FPdict[k][n] for k in np.sort(list(FPdict.keys()))])
             FP_resultsv2 = np.append(FP_resultsv2, theta.reshape(1,9), axis=0)
@@ -202,11 +202,11 @@ def _run_injection_recovery_iter2(injrec, N2=500):
         
     # save FP results
     for i,k in enumerate(np.sort(list(FPdict.keys()))):
-        setattr(injrec.fp, '%sFPs'%k, FP_results[:,i])
+        setattr(injrec.fp, k, FP_results[:,i])
         
     # delete old stuff
     delattr(injrec.fp, 'FP_results')
-    for s in ['injrec_results','argsinjected','bjd','fclean','finjected','efnorm','efnorm_rescaled','injected_model','sect_ranges','sectors']:
+    for s in ['injrec_results','argsinjected','bjd','fclean','finjected','efnorm','efnorm_rescaled','injected_model','sect_ranges','sectors','snr_grid','snr_grid_v2','sens_grid','tls','popt_snr']:
         try:
             delattr(injrec, s)
         except AttributeError:
@@ -348,14 +348,14 @@ def run_tls_Nplanets(injrec, ts, Nmax=3, rtol=0.02):
 
         # identify FP signals
         FPmask = ts.injrec.vetting.FP_mask and ts.injrec.vetting.vetting_mask
-        FPdict = {'P': ts.injrec.vetting.POIs[FPmask],
-                  'T0': ts.injrec.vetting.T0OIs[FPmask],
-                  'D': ts.injrec.vetting.DOIs[FPmask],
-                  'Z': ts.injrec.vetting.ZOIs[FPmask],
-                  'rpRs': ts.injrec.vetting.rpRsOIs[FPmask],
-                  'SDEraw': ts.injrec.vetting.SDErawOIs[FPmask],
-                  'SDE': ts.injrec.vetting.SDEOIs[FPmask],
-                  'snr': ts.injrec.vetting.snrOIs[FPmask],
+        FPdict = {'Ps': ts.injrec.vetting.POIs[FPmask],
+                  'T0s': ts.injrec.vetting.T0OIs[FPmask],
+                  'Ds': ts.injrec.vetting.DOIs[FPmask],
+                  'Zs': ts.injrec.vetting.ZOIs[FPmask],
+                  'rpRss': ts.injrec.vetting.rpRsOIs[FPmask],
+                  'SDEraws': ts.injrec.vetting.SDErawOIs[FPmask],
+                  'SDEs': ts.injrec.vetting.SDEOIs[FPmask],
+                  'snrs': ts.injrec.vetting.snrOIs[FPmask],
                   'efluxes': np.repeat(np.nanmedian(ts.lc.efnorm_rescaled), ts.injrec.vetting.snrOIs.size)}
         
         return is_detected, sde, FPdict
