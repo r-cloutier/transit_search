@@ -1,7 +1,7 @@
 import numpy as np
 from operator import itemgetter
 from itertools import groupby
-
+import pdb
 
 global G, Msun, Mearth, Rsun, Rearth, AU, pc, kb, mproton
 G, Msun, Mearth = 6.67e-11, 1.98849925145e30, 6.04589804468e24
@@ -80,12 +80,16 @@ def estimate_snr_deprecated(ts, P, Rp):
     return Z/sig * np.sqrt(dT/P)
 
 
-def estimate_snr(ts, P, T0, Rp): 
-    Z = (Rearth2m(Rp) / Rsun2m(ts.star.Rs))**2 
-    sig = np.nanmedian(ts.lc.efnorm_rescaled) 
-    transit_times = [T0+n*P for n in np.arange(np.floor((ts.lc.bjd.min()-T0)/P), np.ceil((ts.lc.bjd.max()-T0)/P)+1)]  
-    Ntransits = np.sum([np.any(np.isclose(ts.lc.bjd-t, 0, atol=2/(60*24))) for t in transit_times]) 
-    return Z/sig * np.sqrt(Ntransits)
+def estimate_snr(ts, P, T0, Rp):
+    Z = (Rearth2m(Rp) / Rsun2m(ts.star.Rs))**2
+    sig = np.nanmedian(ts.lc.efnorm_rescaled)
+    # get max number of transits per sect_range because I'm not searching all available sectors at once (only consecutive sectors)
+    Ntransits = np.zeros(len(ts.lc.sect_ranges))
+    for i,s in enumerate(ts.lc.sect_ranges):
+        g = np.in1d(ts.lc.sectors, s)
+        transit_times = [T0+n*P for n in np.arange(np.floor((ts.lc.bjd[g].min()-T0)/P), np.ceil((ts.lc.bjd[g].max()-T0)/P)+1)]
+        Ntransits[i] = np.sum([np.any(np.isclose(ts.lc.bjd[g]-t, 0, atol=2/(60*24))) for t in transit_times])
+    return Z/sig * np.sqrt(np.max(Ntransits))
 
 
 def estimate_Prot_snr(ts, amp_ppt, Prot):
