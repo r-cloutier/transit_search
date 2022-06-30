@@ -158,7 +158,7 @@ def vet_tls_Prot(ts, rtol=0.02, sig=3, injrec=False):
             ts.star.Prot_tls = np.nan
 
 
-def model_comparison(ts, injrec=False):
+def model_comparison_deprecated(ts, injrec=False):
     '''
     In each sector that each PC is found in, check that the delta BIC favours 
     the transit model over the null hypothesis (i.e. a flat line).
@@ -185,6 +185,42 @@ def model_comparison(ts, injrec=False):
         g = np.all(dBIC_vetted)
         vetobj.vetting_mask[i] *= g
         if not g: vetobj.conditions[i] += 64  # condition64
+
+        
+
+def model_comparison(ts, injrec=False):
+    '''
+    For each PC, check that the delta BIC favours the transit model over the
+    null hypothesis (i.e. a flat line) when computed for all sectors, not just 
+    on each set of consecutive sectors. 
+
+    The former generates better agreement with TOIs with many examples.
+    '''
+    vetobj = ts.injrec.vetting if injrec else ts.vetting
+    for i,p in enumerate(vetobj.POIs):
+        
+        y, ey, model = np.zeros(0), np.zeros(0), np.zeros(0)
+        for k in ts.tls.__dict__.keys():
+            # get tls results
+            res = getattr(ts.tls, k)
+
+            if np.isclose(res['period'], p, rtol=cs.P_duplicate_fraction):
+                # interpolate transit model grid to observation epochs 
+                # (add zero and one to the phase edges to avoid bound_errors)
+                fint = interp1d(np.hstack([0,res['model_folded_phase'],1]), np.hstack([1,res['model_folded_model'],1]))
+                model = np.append(model, fint(res['folded_phase']))
+
+                y = np.append(y, res['folded_y'])
+
+                ey = np.append(ey, np.repeat(np.nanmedian(ts.lc.efnorm_rescaled), res['folded_y'].size))
+
+        # compute delta BIC for this OI (i.e. transit minus line)
+        BIC_transit, BIC_null = misc.dBIC(y, ey, model)
+        dBIC_vetted = BIC_transit - BIC_null <= -10
+
+        # does each sector favour this PC's transit model?
+        vetobj.vetting_mask[i] *= dBIC_vetted
+        if not dBIC_vetted: vetobj.conditions[i] += 64  # condition64
 
  
 def plot_light_curves(ts):

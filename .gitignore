@@ -32,3 +32,5 @@ SDEthresh*
 planet_candidate*.ipynb
 CHANGE*py
 FLAG*py
+toi*csv
+Tmag_file.csv

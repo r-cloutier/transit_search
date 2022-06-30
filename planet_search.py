@@ -215,6 +215,7 @@ def run_tls_Nplanets(ts, pltt=True):
     (detrended) light curve.
     '''
     # get approximate stellar parameters
+    pdb.set_trace()
     p = np.ascontiguousarray(tls.catalog_info(TIC_ID=ts.tic))
     ts.star.ab = p[0]
     ts.star.Ms, ts.star.Ms_min, ts.star.Ms_max, ts.star.Rs, ts.star.Rs_min, ts.star.Rs_max, ts.star.Teff = p[1:].astype(float)
@@ -314,7 +315,7 @@ def vet_planets(ts):
     print('\nVetting planet candidates around TIC %i\n'%ts.tic)
     pv.get_POIs(ts)
     pv.vet_SDE(ts)
-    pv.vet_snr(ts)   # snr<3: TOIs 2136
+    #pv.vet_snr(ts)   # snr<3: TOIs 2136
     #pv.vet_multiple_sectors(ts)
     pv.vet_odd_even_difference(ts)
     pv.vet_Prot(ts)

@@ -419,7 +419,7 @@ def vet_planets(ts):
     '''
     pv.get_POIs(ts, injrec=True)
     pv.vet_SDE(ts, injrec=True)
-    pv.vet_snr(ts, injrec=True)   # snr<3: TOIs 2136
+    #pv.vet_snr(ts, injrec=True)   # snr<3: TOIs 2136
     #pv.vet_multiple_sectors(ts, injrec=True)
     pv.vet_odd_even_difference(ts, injrec=True)
     pv.vet_Prot(ts, injrec=True)
