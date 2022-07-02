@@ -373,7 +373,7 @@ def run_tls_Nplanets_and_vet(injrec, ts, Nmax=3, rtol=0.02):
               'SDEraws': ts.injrec.vetting.SDErawOIs[FPmask],
               'SDEs': ts.injrec.vetting.SDEOIs[FPmask],
               'snrs': ts.injrec.vetting.snrOIs[FPmask],
-              'efluxes': np.repeat(np.nanmedian(ts.lc.efnorm_rescaled), ts.injrec.vetting.snrOIs.size)}
+              'efluxes': np.repeat(np.nanmedian(ts.lc.efnorm_rescaled), FPmask.sum())}
         
     return is_detected, sde, FPdict
         
