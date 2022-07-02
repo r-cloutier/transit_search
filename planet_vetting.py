@@ -133,10 +133,12 @@ def vet_tls_Prot(ts, rtol=0.02, sig=3, injrec=False):
     fails to flag stellar rotation.
     '''
     vetobj = ts.injrec.vetting if injrec else ts.vetting
+    tlsobj = ts.injrec.tls if injrec else ts.tls
+
     for i,p in enumerate(vetobj.POIs):
         rotation_signature = []
-        for k in ts.tls.__dict__.keys():
-            per, pwr = getattr(ts.tls,k).periods, getattr(ts.tls,k).power
+        for k in tlsobj.__dict__.keys():
+            per, pwr = getattr(tlsobj,k).periods, getattr(tlsobj,k).power
             is_harmonic_significant = np.zeros(4).astype(bool)    # check that sde at the harmonics are large
             is_harmonic_decreasing = np.zeros(3).astype(bool)     # check that the sde of the peaks are decreasing
             for n in range(1,5):
@@ -164,11 +166,13 @@ def model_comparison_deprecated(ts, injrec=False):
     the transit model over the null hypothesis (i.e. a flat line).
     '''
     vetobj = ts.injrec.vetting if injrec else ts.vetting
+    tlsobj = ts.injrec.tls if injrec else ts.tls
+
     for i,p in enumerate(vetobj.POIs):
         dBIC_vetted = []  # if True, then transit model is favoured by the dBIC
-        for k in ts.tls.__dict__.keys():
+        for k in tlsobj.__dict__.keys():
             # get tls results
-            res = getattr(ts.tls, k)
+            res = getattr(tlsobj, k)
 
             if np.isclose(res['period'], p, rtol=cs.P_duplicate_fraction):
                 # interpolate transit model grid to observation epochs 
@@ -197,12 +201,14 @@ def model_comparison(ts, injrec=False):
     The former generates better agreement with TOIs with many examples.
     '''
     vetobj = ts.injrec.vetting if injrec else ts.vetting
+    tlsobj = ts.injrec.tls if injrec else ts.tls
+    
     for i,p in enumerate(vetobj.POIs):
         
         y, ey, model = np.zeros(0), np.zeros(0), np.zeros(0)
-        for k in ts.tls.__dict__.keys():
+        for k in tlsobj.__dict__.keys():
             # get tls results
-            res = getattr(ts.tls, k)
+            res = getattr(tlsobj, k)
 
             if np.isclose(res['period'], p, rtol=cs.P_duplicate_fraction):
                 # interpolate transit model grid to observation epochs 

@@ -257,7 +257,7 @@ def run_tls_Nplanets(ts, pltt=True):
         setattr(ts.tls, 'results_%i_s%s'%(iter_count,slabel), results)
 
         # mask out found signal
-        lc_input = _mask_transits(*lc_input, getattr(ts.tls, 'results_%i_s%s'%(iter_count,slabel)))
+        lc_input = mask_transits(*lc_input, getattr(ts.tls, 'results_%i_s%s'%(iter_count,slabel)))
 
         if pltt:
             # plotting
@@ -285,7 +285,7 @@ def run_tls_Nplanets(ts, pltt=True):
             setattr(ts.tls, 'results_%i_s%s'%(iter_count,slabel), results)
 
             # mask out found signal
-            lc_input = _mask_transits(*lc_input, getattr(ts.tls, 'results_%i_s%s'%(iter_count,slabel)))
+            lc_input = mask_transits(*lc_input, getattr(ts.tls, 'results_%i_s%s'%(iter_count,slabel)))
 
             if pltt:
                 # plotting
@@ -338,7 +338,7 @@ def _run_tls(bjd, fdetrend, efnorm, ab, period_max=0):
 
 
 
-def _mask_transits(bjd, fdetrend, efnorm, results):
+def mask_transits(bjd, fdetrend, efnorm, results):
     '''
     Mask in-transit points so that the TLS can be rerun on the masked LC.
     '''

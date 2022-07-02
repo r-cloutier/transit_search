@@ -10,6 +10,7 @@ import constants as cs
 import transitleastsquares as tls
 import define_tls_grid as dtg
 import planet_vetting as pv
+from planet_search import mask_transits
 
 global Tmagfname
 Tmagfname = '%s/Tmag_file.csv'%cs.repo_dir
@@ -84,7 +85,6 @@ def _run_injection_recovery_iter1(injrec, N1=500):
         ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
         count = 0
         while not hasattr(ts, 'DONEcheck_version'):
-        ##while not hasattr(ts.vetting, 'conditions'):
             tic = np.random.choice(injrec.tics_unique)
             ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
             if count < 1000:
@@ -109,7 +109,7 @@ def _run_injection_recovery_iter1(injrec, N1=500):
         
         # run TLS
         print('\nRunning injection-recovery on TIC %i (P=%.3f days, F=%.1f FEarth, T0=%.3f, Rp=%.2f REarth, b=%.2f, S/N=%.1f)'%tuple(np.append(tic,injrec_results[i,6:12])))
-        det, sde[i], FPdict = run_tls_Nplanets(injrec, ts)
+        det, sde[i], FPdict = run_tls_Nplanets_and_vet(injrec, ts)
         injrec_results[i,12:] = sde[i], det
 
         # save FPs
@@ -138,7 +138,6 @@ def _run_injection_recovery_iter1(injrec, N1=500):
 
 def _run_injection_recovery_iter2(injrec, N2=500):
     assert injrec.DONE1
-    assert not injrec.DONE
 
     N2 = int(N2)
 
@@ -157,7 +156,6 @@ def _run_injection_recovery_iter2(injrec, N2=500):
         ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
         count = 0
         while not hasattr(ts, 'DONEcheck_version'):
-        ##while not hasattr(ts.vetting, 'conditions'):
             tic = np.random.choice(injrec.tics_unique)
             ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
             if count < 1000:
@@ -183,7 +181,7 @@ def _run_injection_recovery_iter2(injrec, N2=500):
         
         # run TLS
         print('\nRunning injection-recovery on TIC %i (P=%.3f days, F=%.1f FEarth, T0=%.3f, Rp=%.2f REarth, b=%.2f, S/N=%.1f)'%tuple(np.append(tic,injrec_resultsv2[i,6:12])))
-        det, sde[i], FPdict = run_tls_Nplanets(injrec, ts)
+        det, sde[i], FPdict = run_tls_Nplanets_and_vet(injrec, ts)
         injrec_resultsv2[i,12:] = sde[i], det
 
         # save FPs
@@ -307,11 +305,12 @@ def transit_model(bjd, Ms, Rs, P, T0, RpRearth, b, ecc, omegadeg, ab):
 
 
 
-def run_tls_Nplanets(injrec, ts, Nmax=3, rtol=0.02):
+def run_tls_Nplanets_and_vet(injrec, ts, Nmax=3, rtol=0.02):
     '''
     Run the Transit-Least-Squares search for multiple signals on an input 
     (detrended) light curve. Return whether the in
     '''
+    Pinj = injrec.argsinjected[0]
     is_detected = False
     for i,sect in enumerate(ts.lc.sect_ranges):
 
@@ -324,84 +323,62 @@ def run_tls_Nplanets(injrec, ts, Nmax=3, rtol=0.02):
         Pmax,_,_ = dtg.get_Ntransit_vs_period(ts.tic, ts.lc.bjd[g], ts.lc.sectors[g], pltt=False)
 
         # run the tls and search for the injected signal
-        print('\nRunning TLS for injection-recovery (sector(s) %s)\n'%(slabel))
-            
+        iter_count = 1
+        print('\nRunning TLS for injection-recovery %i (sector(s) %s)\n'%(iter_count,slabel))
+
         # run tls on this sector for light curves with and without the injected planet (i.e. null)
         results = _run_tls(*lc_input, ts.star.ab, period_max=float(Pmax))
         rp = misc.m2Rearth(misc.Rsun2m(results['rp_rs']*ts.star.Rs))
         results.snr = misc.estimate_snr(ts, results['period'], results['T0'], rp) if np.isfinite(results['period']) else np.nan
-        setattr(ts.injrec.tls, 'results_s%s'%slabel, results)
+        setattr(ts.injrec.tls, 'results_%i_s%s'%(iter_count,slabel), results)
 
-        # vet OIs using the same criteria as in the transit search
-        vet_planets(ts)
+        # check if detected to save time
+        if np.any(np.isclose([Pinj/2, Pinj, Pinj*2], results.period, rtol=rtol)):
+            break
 
-        # check if the injected planets is recovered (function also flags FPs)
-        Pinj = injrec.argsinjected[0]
-        is_detected = is_planet_detected(ts, Pinj)
+        # mask out found signal
+        lc_input = mask_transits(*lc_input, getattr(ts.injrec.tls, 'results_%i_s%s'%(iter_count,slabel)))
 
-        detlabel = 'is' if is_detected else 'is not'
-        print('\nInjected planet %s detected around TIC %i (P=%.3f days, S/N=%.1f)'%(detlabel, ts.tic, Pinj, injrec.argsinjected[-1]))
+        while (iter_count < cs.Nplanets_max) and (np.any(results.power >= cs.SDEthreshold)):
 
-        # get SDE of the injected period (if P > Pmax then there's no SDE value)
-        g = np.isclose(results['periods'], Pinj, rtol=rtol)
-        sde = np.nanmax(results['power'][g]) if g.sum() > 0 else np.nan
+            # run tls on this sector
+            iter_count += 1
+            print('\nRunning TLS for planet %i (sector(s) %s)\n'%(iter_count,slabel))
+            results = _run_tls(*lc_input, ts.star.ab, period_max=float(Pmax))
+            setattr(ts.injrec.tls, 'results_%i_s%s'%(iter_count,slabel), results)
 
-        # identify FP signals
-        FPmask = ts.injrec.vetting.FP_mask and ts.injrec.vetting.vetting_mask
-        FPdict = {'Ps': ts.injrec.vetting.POIs[FPmask],
-                  'T0s': ts.injrec.vetting.T0OIs[FPmask],
-                  'Ds': ts.injrec.vetting.DOIs[FPmask],
-                  'Zs': ts.injrec.vetting.ZOIs[FPmask],
-                  'rpRss': ts.injrec.vetting.rpRsOIs[FPmask],
-                  'SDEraws': ts.injrec.vetting.SDErawOIs[FPmask],
-                  'SDEs': ts.injrec.vetting.SDEOIs[FPmask],
-                  'snrs': ts.injrec.vetting.snrOIs[FPmask],
-                  'efluxes': np.repeat(np.nanmedian(ts.lc.efnorm_rescaled), ts.injrec.vetting.snrOIs.size)}
+            # mask out found signal
+            lc_input = mask_transits(*lc_input, getattr(ts.injrec.tls, 'results_%i_s%s'%(iter_count,slabel)))
+
+    # vet OIs using the same criteria as in the transit search
+    vet_planets(ts)
+
+    # check if the injected planets is recovered (function also flags FPs)
+    is_detected = is_planet_detected(ts, Pinj)
+
+    detlabel = 'is' if is_detected else 'is not'
+    print('\nInjected planet %s detected around TIC %i (P=%.3f days, S/N=%.1f)\n'%(detlabel, ts.tic, Pinj, injrec.argsinjected[-1]))
+
+    # get SDE of the injected period (if P > Pmax then there's no SDE value)
+    g = np.isclose(results['periods'], Pinj, rtol=rtol)
+    sde = np.nanmax(results['power'][g]) if g.sum() > 0 else np.nan
+
+    # identify FP signals
+    FPmask = ts.injrec.vetting.FP_mask and ts.injrec.vetting.vetting_mask
+    FPdict = {'Ps': ts.injrec.vetting.POIs[FPmask],
+              'T0s': ts.injrec.vetting.T0OIs[FPmask],
+              'Ds': ts.injrec.vetting.DOIs[FPmask],
+              'Zs': ts.injrec.vetting.ZOIs[FPmask],
+              'rpRss': ts.injrec.vetting.rpRsOIs[FPmask],
+              'SDEraws': ts.injrec.vetting.SDErawOIs[FPmask],
+              'SDEs': ts.injrec.vetting.SDEOIs[FPmask],
+              'snrs': ts.injrec.vetting.snrOIs[FPmask],
+              'efluxes': np.repeat(np.nanmedian(ts.lc.efnorm_rescaled), ts.injrec.vetting.snrOIs.size)}
         
-        return is_detected, sde, FPdict
+    return is_detected, sde, FPdict
         
+
         
-        '''# get highest peaks in the TLS of the null light curve (excluding PCs)
-        mask = np.ones_like(results_raw['power']).astype(bool)
-        mask[results_raw['power'] < 0] = False
-        for p in ts.vetting.POIs[ts.vetting.vetting_mask]:
-            mask[np.isclose(results_raw['periods'], p, rtol=.02)] = False
-        s = np.argsort(results_raw['power'][mask])[::-1]
-        g = abs(np.diff(s)) > 5
-        Psrec_raw = results_raw['periods'][mask][s[:-1][g][:int(Nmax)]]
-
-        # get highest peaks in the TLS
-        mask = np.ones_like(results['power']).astype(bool)
-        mask[results['power'] < 0] = False
-        for p in ts.vetting.POIs[ts.vetting.vetting_mask]:
-            mask[np.isclose(results['periods'], p, rtol=.02)] = False
-        s = np.argsort(results['power'][mask])[::-1]
-        g = abs(np.diff(s)) > 5
-        Psrec = results['periods'][mask][s[:-1][g][:int(Nmax)]]
-
-        # check if the planet is recovered
-        g = np.isclose(results['periods'], injrec.argsinjected[0], rtol=.05)
-        if g.sum() > 0:
-            thetainj = injrec.argsinjected[0], injrec.argsinjected[-1], np.nanmax(results['power'][g])   # P,snr,sde
-            is_detected += is_planet_detected(ts, thetainj, Psrec, Psrec_raw, rtol=rtol)
-        else:
-            is_detected += False
-
-        detlabel = 'is' if is_detected else 'is not'
-        print('\nInjected planet %s detected around TIC %i (P=%.3f days, S/N=%.1f)'%(detlabel, ts.tic, injrec.argsinjected[0], injrec.argsinjected[-1]))
-
-        # get SDE of the injected period (if P > Pmax then there's no SDE value)
-        g = np.isclose(results['periods'], injrec.argsinjected[0], rtol=rtol)
-        sde = np.nanmax(results['power'][g]) if g.sum() > 0 else np.nan
-
-        # stop searching if the planet is found
-        if is_detected:
-            return is_detected, sde
-
-    return is_detected, sde'''
-
-
-
 def _run_tls(bjd, fdetrend, efnorm, ab, period_max=0):
     model = tls.transitleastsquares(bjd, fdetrend, efnorm)
     if period_max > 0:
@@ -436,7 +413,7 @@ def is_planet_detected(ts, Pinj, rtol=0.02):
     '''
     # also check multiples of the injected period 
     Ps_inj = []
-    for j in (1,5):
+    for j in range(1,5):
         Ps_inj.append(Pinj*j)
         Ps_inj.append(Pinj/j)
     Ps_inj = np.sort(np.unique(Ps_inj))
@@ -449,57 +426,8 @@ def is_planet_detected(ts, Pinj, rtol=0.02):
 
     # is the injected planet detected?
     is_detected = np.any(np.invert(ts.injrec.vetting.FP_mask))
-    
-    return is_detected
-
-
-
-def is_planet_detected_deprecated(ts, thetainj, Psrec, Psrec_raw, rtol=.02):
-    '''
-    Given the period of the injected planet, check if any of the top peaks 
-    in the TLS are close to the injected period.
-    '''    
-    Pinj, snrinj, sdeinj = thetainj
-
-    # get possible peaks to check
-    Ppeaks = []
-    for j in range(1,5):
-        Ppeaks.append(Pinj*j)
-        Ppeaks.append(Pinj/j)
-    Ppeaks = np.sort(np.unique(Ppeaks))
-
-    # get rotation periods and harmonics to reject
-    Prots = []
-    for j in range(1,4):
-        Prots.append(ts.star.Prot_gls/j)
-    Prots = np.sort(Prots)
-
-    # check if there is a peak in the TLS that is not close to rotation
-    is_detected = False
-    for p in Psrec:
-        is_detected += np.any((np.isclose(Ppeaks, p, rtol=rtol))) & \
-                       np.all(np.invert(np.isclose(Prots, p, rtol=rtol))) & \
-                       np.all(np.invert(np.isclose(Psrec_raw, p, rtol=rtol))) & \
-                       (snrinj >= cs.SNRthreshold) & \
-                       (sdeinj >= cs.SDEthreshold) & \
-                       (vet_Prot_injrec(ts, p))
 
     return is_detected
-
-
-def vet_Prot_injrec_deprecated(ts, p, rtol=0.02):
-    '''
-    Check that the planet candidate is not close to Prot or a harmonic.
-    '''
-    # get rotation periods and harmonics to reject
-    Prots = []
-    for j in range(1,4):
-        Prots.append(ts.star.Prot_gls/j)
-    Prots = np.sort(Prots)
-
-    # check each POI
-    return np.all(np.invert(np.isclose(Prots, p, rtol=rtol)))
-
 
 
 
@@ -518,7 +446,6 @@ def compile_Tmags():
         try:
             ts = loadpickle(fname)
             if ts.DONE and hasattr(ts, 'DONEcheck_version'):
-            ##if ts.DONE and hasattr(ts.vetting, 'conditions'):
                 ticsout[i] = ts.tic
                 Tmags[i] = ts.star.Tmag
         except:
