@@ -364,7 +364,7 @@ def run_tls_Nplanets_and_vet(injrec, ts, Nmax=3, rtol=0.02):
     sde = np.nanmax(results['power'][g]) if g.sum() > 0 else np.nan
 
     # identify FP signals
-    FPmask = ts.injrec.vetting.FP_mask and ts.injrec.vetting.vetting_mask
+    FPmask = ts.injrec.vetting.FP_mask * ts.injrec.vetting.vetting_mask
     FPdict = {'Ps': ts.injrec.vetting.POIs[FPmask],
               'T0s': ts.injrec.vetting.T0OIs[FPmask],
               'Ds': ts.injrec.vetting.DOIs[FPmask],
