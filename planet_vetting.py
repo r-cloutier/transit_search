@@ -1,6 +1,7 @@
 import numpy as np
 import pylab as plt
 from scipy.interpolate import interp1d
+from scipy.optimize import curve_fit
 import pandas as pd
 import constants as cs
 import misc, pdb
@@ -35,7 +36,7 @@ def get_POIs(ts, injrec=False):
     POIsv1 = POIsv1[np.argsort(POIsv1,0)[:,0]]
     
     # identify duplicates
-    POIsv2 = np.zeros((0,12))
+    POIsv2 = np.zeros((0,13))
     for p in POIsv1[:,0]:
         if np.isnan(p):
             continue
@@ -45,6 +46,7 @@ def get_POIs(ts, injrec=False):
         avgD = np.average(POIsv1[duplicates,2], weights=POIsv1[duplicates,8])
         avgZ = np.average(POIsv1[duplicates,3], weights=POIsv1[duplicates,8])
         avgrpRs = np.average(POIsv1[duplicates,4], weights=POIsv1[duplicates,8])
+        avgRp = misc.m2Rearth(misc.Rsun2m(avgrpRs * ts.star.Rs))
         avgchi2min = np.average(POIsv1[duplicates,5], weights=POIsv1[duplicates,8])
         avgchi2redmin = np.average(POIsv1[duplicates,6], weights=POIsv1[duplicates,8])
         avgSDEraw = np.average(POIsv1[duplicates,7], weights=POIsv1[duplicates,8])
@@ -52,7 +54,7 @@ def get_POIs(ts, injrec=False):
         avgsnr = np.average(POIsv1[duplicates,9], weights=POIsv1[duplicates,8])
         avgOED = np.average(POIsv1[duplicates,10], weights=POIsv1[duplicates,8])
         Nocc = np.sum(duplicates)
-        POIsv2 = np.vstack([POIsv2, [avgP,avgT0,avgD,avgZ,avgrpRs,avgchi2min,avgchi2redmin,avgSDEraw,avgSDE,avgsnr,avgOED,Nocc]])
+        POIsv2 = np.vstack([POIsv2, [avgP,avgT0,avgD,avgZ,avgrpRs,avgRp,avgchi2min,avgchi2redmin,avgSDEraw,avgSDE,avgsnr,avgOED,Nocc]])
 
     # remove duplicates
     _,inds = np.unique(POIsv2[:,0], return_index=True)
@@ -62,7 +64,7 @@ def get_POIs(ts, injrec=False):
     # they may be real (e.g. L 98-59)
     # save parameters for each OI
     vetobj = ts.injrec.vetting if injrec else ts.vetting
-    for i,s in enumerate(['POIs','T0OIs','DOIs','ZOIs','rpRsOIs','chi2minOIs','chi2redminOIs','SDErawOIs','SDEOIs','snrOIs','oddevendiff_sigma','NoccurrencesOIs']):
+    for i,s in enumerate(['POIs','T0OIs','DOIs','ZOIs','rpRsOIs','RpOIs','chi2minOIs','chi2redminOIs','SDErawOIs','SDEOIs','snrOIs','oddevendiff_sigma','NoccurrencesOIs']):
         setattr(vetobj, s, POIsv3[:,i])
 
     vetobj.vetting_mask = np.ones(POIsv3.shape[0]).astype(bool)
@@ -138,6 +140,15 @@ def vet_tls_Prot(ts, rtol=0.02, sig=3, injrec=False):
     for i,p in enumerate(vetobj.POIs):
         rotation_signature = []
         for k in tlsobj.__dict__.keys():
+            # check if sinusoidal model is favoured over a transit interpretation
+            theta = 1-getattr(tlsobj,k)['depth'], .5, 1, 1
+            x, y, ey = getattr(tlsobj,k)['folded_phase'], getattr(tlsobj,k)['folded_y'], np.repeat(np.nanmedian(ts.lc.efnorm_rescaled),getattr(tlsobj,k)['folded_y'].size)
+            popt,_ = curve_fit(misc.sinemodel, x, y, p0=theta, bounds=((theta[0],0,0,.9),(1,1,np.inf,1.1)))
+            model = misc.sinemodel(x, *popt)
+            _,_,dBIC = misc.DeltaBIC(y, ey, model, getattr(tlsobj,k)['model_folded_model'], k=4, knull=5)
+            dBIC_favours_rotation = dBIC <= -10
+
+            # check if TLS peaks look like rotation+harmonics
             per, pwr = getattr(tlsobj,k).periods, getattr(tlsobj,k).power
             is_harmonic_significant = np.zeros(4).astype(bool)    # check that sde at the harmonics are large
             is_harmonic_decreasing = np.zeros(3).astype(bool)     # check that the sde of the peaks are decreasing
@@ -148,8 +159,10 @@ def vet_tls_Prot(ts, rtol=0.02, sig=3, injrec=False):
                     if n > 1: is_harmonic_decreasing[n-2] = np.max(pwr[g]) <= np.max(pwr[np.isclose(per, p*(n-1), rtol=rtol)])
                 else:
                     is_harmonic_significant[n-1] = False
-            g = np.all(is_harmonic_significant) and np.all(is_harmonic_decreasing)    # false POI if all the harmonics have significant peaks and show decreasing pwr with increasing period
+            # false POI if all the harmonics have significant peaks and show decreasing pwr with increasing period
+            g = np.all(is_harmonic_significant) and np.all(is_harmonic_decreasing) and (dBIC_favours_rotation)
             rotation_signature.append(g)
+
         vetobj.vetting_mask[i] *= np.sum(rotation_signature)/len(rotation_signature) <= .5  # need at least half of sectors to favour rotation
         
         # save the tls-recovered period if found
@@ -182,8 +195,8 @@ def model_comparison_deprecated(ts, injrec=False):
 
                 # compute delta BIC (i.e. transit minus line)
                 ey = np.median(ts.lc.efnorm_rescaled)
-                BIC_transit, BIC_null = misc.dBIC(res['folded_y'], ey, model)
-                dBIC_vetted.append(BIC_transit - BIC_null <= -10)
+                BIC_transit, BIC_null, dBIC = misc.DeltaBIC(res['folded_y'], ey, model, np.ones_like(model))
+                dBIC_vetted.append(dBIC <= -10)
 
         # does each sector favour this PC's transit model?
         g = np.all(dBIC_vetted)
@@ -221,8 +234,8 @@ def model_comparison(ts, injrec=False):
                 ey = np.append(ey, np.repeat(np.nanmedian(ts.lc.efnorm_rescaled), res['folded_y'].size))
 
         # compute delta BIC for this OI (i.e. transit minus line)
-        BIC_transit, BIC_null = misc.dBIC(y, ey, model)
-        dBIC_vetted = BIC_transit - BIC_null <= -10
+        BIC_transit, BIC_null, dBIC = misc.DeltaBIC(y, ey, model, np.ones_like(model))
+        dBIC_vetted = dBIC <= -10
 
         # does each sector favour this PC's transit model?
         vetobj.vetting_mask[i] *= dBIC_vetted
@@ -299,13 +312,13 @@ def save_planet_parameters(ts):
                       np.repeat(ts.star.Tmag, N), np.repeat(ts.star.Teff, N), 
                       np.repeat(ts.star.Ms, N), np.repeat(ts.star.Rs, N),
                       ts.vetting.POIs, ts.vetting.T0OIs, ts.vetting.DOIs,
-                      ts.vetting.ZOIs, ts.vetting.rpRsOIs, ts.vetting.chi2minOIs,
+                      ts.vetting.ZOIs, ts.vetting.rpRsOIs, ts.vetting.RpOIs,ts.vetting.chi2minOIs,
                       ts.vetting.chi2redminOIs, ts.vetting.SDErawOIs,
                       ts.vetting.SDEOIs, ts.vetting.snrOIs,
                       ts.vetting.oddevendiff_sigma, ts.vetting.NoccurrencesOIs,
                       np.repeat(ts.lc.Nsect, N), ts.vetting.vetting_mask, ts.vetting.conditions]).T
     df = pd.DataFrame(outp, columns=['TIC','sectors','RA','Dec','Tmag','Teff','Ms','Rs',
-                                     'P','T0','duration_hrs','depth_ppt','rpRs',
+                                     'P','T0','duration_hrs','depth_ppt','rpRs','Rp',
                                      'chi2min','chi2redmin','SDEraw','SDE','snr',
                                      'oddevendiff_sig','Noccurrences','Nsectors','vetted?','vetting_conditions'])
     df = df.sort_values('SDE', ascending=False)

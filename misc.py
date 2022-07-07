@@ -103,16 +103,20 @@ def compute_instellation(Teff, Rs, Ms, P):
     return F
 
 
+def sinemodel(x, A, t0, P, offset):
+    return A * np.sin(2*np.pi*(x-t0)/P) + offset
+
+
 def lnlike(y, ey, model):
     assert np.all(np.isfinite(np.ascontiguousarray(ey)))
     return -.5 * np.nansum((y-model)**2 / ey**2)
 
 
-def dBIC(y, ey, model):
+def DeltaBIC(y, ey, model, modelnull, k=5, knull=1):
     '''Transit model (from the TLS) vs the null model (i.e. a flat line)'''
-    BIC_transit = 5*np.log(y.size) - 2*lnlike(y, ey, model)   # theta = {P,T0,D,Z,baseline}
-    BIC_null = 1*np.log(y.size) - 2*lnlike(y, ey, np.ones_like(model))
-    return BIC_transit, BIC_null
+    BIC_model = k*np.log(y.size) - 2*lnlike(y, ey, model)   # theta = {P,T0,D,Z,baseline}
+    BIC_null = knull*np.log(y.size) - 2*lnlike(y, ey, modelnull)
+    return BIC_model, BIC_null, BIC_model - BIC_null
 
 
 def bin_lc(x_fold, y, bin_width_min=60):

@@ -33,6 +33,9 @@ def get_Ntransit_vs_period(tic, bjd, sectors, pltt=True):
         g = np.median(Ntransits_covered[si],1) >= cs.Ntransits_min
         Pmax_per_sector[si] = Pmax[g][-1] if g.sum() > 0 else np.nan
 
+        # limit search to a maximum period to save time on planets that we don't have the statistical power to constrain
+        ##Pmax  TEMP
+
 
     # plot
     if pltt:

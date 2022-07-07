@@ -84,7 +84,7 @@ def _run_injection_recovery_iter1(injrec, N1=500):
         tic = np.random.choice(injrec.tics_unique)
         ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
         count = 0
-        while not hasattr(ts, 'DONEcheck_version'):
+        while ts.DONEcheck_version != cs.DONEcheck_version:
             tic = np.random.choice(injrec.tics_unique)
             ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
             if count < 1000:
@@ -155,7 +155,7 @@ def _run_injection_recovery_iter2(injrec, N2=500):
         tic = np.random.choice(injrec.tics_unique)
         ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
         count = 0
-        while not hasattr(ts, 'DONEcheck_version'):
+        while ts.DONEcheck_version != cs.DONEcheck_version:
             tic = np.random.choice(injrec.tics_unique)
             ts = loadpickle('%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic))
             if count < 1000:
@@ -358,6 +358,8 @@ def run_tls_Nplanets_and_vet(injrec, ts, Nmax=3, rtol=0.02):
 
     detlabel = 'is' if is_detected else 'is not'
     print('\nInjected planet %s detected around TIC %i (P=%.3f days, S/N=%.1f)\n'%(detlabel, ts.tic, Pinj, injrec.argsinjected[-1]))
+    if not is_detected:
+        print(ts.injrec.vetting.POIs, ts.injrec.vetting.conditions_indiv, ts.injrec.vetting.conditions_defs, '\n')
 
     # get SDE of the injected period (if P > Pmax then there's no SDE value)
     g = np.isclose(results['periods'], Pinj, rtol=rtol)
@@ -445,7 +447,7 @@ def compile_Tmags():
         fname = '%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir,tic)
         try:
             ts = loadpickle(fname)
-            if ts.DONE and hasattr(ts, 'DONEcheck_version'):
+            if ts.DONE and ts.DONEcheck_version == cs.DONEcheck_version:
                 ticsout[i] = ts.tic
                 Tmags[i] = ts.star.Tmag
         except:

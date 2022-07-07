@@ -36,7 +36,7 @@ def run_full_planet_search(tic, use_20sec=False, overwrite=False):
         run_tls_Nplanets(ts)
         ts.pickleobject()
         vet_planets(ts)
-        setattr(ts, 'DONEcheck_version', cs.DONEcheck_version)
+        ts.DONEcheck_version = cs.DONEcheck_version
         ts.DONE = True
         ts.pickleobject()
     except Exception:
@@ -50,7 +50,7 @@ def is_already_done(tic):
     fname = '%s/MAST/TESS/TIC%i/TESSLC_planetsearch'%(cs.repo_dir, tic)
     if os.path.exists(fname):
         ts = loadpickle(fname)
-        return ts.DONE and hasattr(ts,'DONEcheck_version') 
+        return ts.DONE and ts.DONEcheck_version == cs.DONEcheck_version
     else:
         return False
 
@@ -181,20 +181,23 @@ def get_Prot_from_GLS(ts, pltt=True):
     '''
     # get most consecutive sectors
     sect_counts = [len(sr) for sr in ts.lc.sect_ranges]
-    g = np.in1d(ts.lc.sectors_raw, ts.lc.sect_ranges[np.argmax(sect_counts)])
+    gs = np.in1d(ts.lc.sectors_raw, ts.lc.sect_ranges[np.argmax(sect_counts)])
 
     # compute gls
-    x, y = misc.bin_lc(ts.lc.bjd_raw[g], ts.lc.fnorm_raw[g])
+    x, y = misc.bin_lc(ts.lc.bjd_raw[gs], ts.lc.fnorm_raw[gs])
     g = y != 0
-    T = 27 * np.max(sect_counts)
+    T = ts.lc.bjd_raw[gs].max() - ts.lc.bjd_raw[gs].min()
     gls = Gls((x[g], y[g], np.ones(g.sum())), fend=10, fbeg=1/T)
 
     # save stuff
     ts.gls.Pmin, ts.gls.Pmax = 1/gls.fend, 1/gls.fbeg
     ts.gls.periods, ts.gls.power = 1/gls.freq, gls.power
- 
-    # check if there's a strong peak indicative of Prot
-    ts.star.Prot_gls = ts.gls.periods[np.argmax(ts.gls.power)] if ts.gls.power.max() >= cs.minGlspwr else np.nan
+
+    # check if a rotation period is likely detected (i.e. has large GLS power and sinusoidal model is favoured)
+    ts.gls.theta = gls.best['amp'], gls.best['T0'], gls.best['P'], gls.best['offset']
+    model = misc.sinemodel(ts.lc.bjd_raw[gs], *ts.gls.theta)
+    _,_,dBIC = misc.DeltaBIC(ts.lc.fnorm_raw[gs], ts.lc.efnorm_raw[gs], model, np.ones_like(model), k=4)
+    ts.star.Prot_gls = gls.best['P'] if (ts.gls.power.max() >= cs.minGlspwr) and (dBIC <= -10) else np.nan
  
     # save gls plot
     if pltt:
