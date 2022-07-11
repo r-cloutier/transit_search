@@ -1,4 +1,4 @@
-global t0, plot_dir, minsector, maxsector, P_duplicate_fraction, Ntransits_min, Nplanets_max, SDEthreshold, Pgrid, Rpgrid, bgrid, DONEcheck_version
+global t0, plot_dir, minsector, maxsector, P_duplicate_fraction, Ntransits_min, Nplanets_max, SDEthreshold, Pgrid, Rpgrid, bgrid, DONEcheck_version 
   
 # time offset for plotting
 t0 = 2457e3
