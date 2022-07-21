@@ -1,4 +1,4 @@
-global t0, plot_dir, minsector, maxsector, P_duplicate_fraction, Ntransits_min, Nplanets_max, SDEthreshold, Pgrid, Rpgrid, bgrid, DONEcheck_version 
+global t0, plot_dir, minsector, maxsector, P_duplicate_fraction, Ntransits_min, Nplanets_max, SDEthreshold, Pgrid, Rpgrid, bgrid, DONEcheck_version
   
 # time offset for plotting
 t0 = 2457e3
@@ -13,7 +13,7 @@ P_duplicate_fraction = 0.02
 minsector = 1
 
 # highest TESS sector to search for data
-maxsector = 55
+maxsector = 58
 
 # minimum number of transits
 Ntransits_min = 3

@@ -87,8 +87,10 @@ def read_TESS_data(tic, minsector=1, maxsector=55, quality_cut=True,
 
     # restrict quality flags
     if quality_cut:
-        g = (qual_flags == 0) & (np.isfinite(fnorm)) & (np.isfinite(efnorm))
-        bjd, fnorm, efnorm, sectors, qual_flags, texps = bjd[g], fnorm[g], efnorm[g], sectors[g], qual_flags[g], texps[g]
+        g = (qual_flags == 0) & (np.isfinite(fnorm)) & (np.isfinite(efnorm)) & (np.isfinite(bjd))
+    else:
+        g = (np.isfinite(fnorm)) & (np.isfinite(efnorm)) & (np.isfinite(bjd))
+    bjd, fnorm, efnorm, sectors, qual_flags, texps = bjd[g], fnorm[g], efnorm[g], sectors[g], qual_flags[g], texps[g]
 
      # get Tmag
     star_info = Catalogs.query_object("TIC %i"%tic, catalog="TIC")

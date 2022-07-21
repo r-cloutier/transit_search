@@ -140,6 +140,7 @@ def vet_tls_Prot(ts, rtol=0.02, sig=3, injrec=False):
     for i,p in enumerate(vetobj.POIs):
         rotation_signature = []
         for k in tlsobj.__dict__.keys():
+
             # check if sinusoidal model is favoured over a transit interpretation
             theta = 1-getattr(tlsobj,k)['depth'], .5, 1, 1
             x, y, ey = getattr(tlsobj,k)['folded_phase'], getattr(tlsobj,k)['folded_y'], np.repeat(np.nanmedian(ts.lc.efnorm_rescaled),getattr(tlsobj,k)['folded_y'].size)
@@ -316,10 +317,11 @@ def save_planet_parameters(ts):
                       ts.vetting.chi2redminOIs, ts.vetting.SDErawOIs,
                       ts.vetting.SDEOIs, ts.vetting.snrOIs,
                       ts.vetting.oddevendiff_sigma, ts.vetting.NoccurrencesOIs,
-                      np.repeat(ts.lc.Nsect, N), ts.vetting.vetting_mask, ts.vetting.conditions]).T
+                      np.repeat(ts.lc.Nsect, N), ts.vetting.vetting_mask, ts.vetting.conditions,
+                      np.repeat(ts.DONEcheck_version, N)]).T
     df = pd.DataFrame(outp, columns=['TIC','sectors','RA','Dec','Tmag','Teff','Ms','Rs',
                                      'P','T0','duration_hrs','depth_ppt','rpRs','Rp',
-                                     'chi2min','chi2redmin','SDEraw','SDE','snr',
-                                     'oddevendiff_sig','Noccurrences','Nsectors','vetted?','vetting_conditions'])
+                                     'chi2min','chi2redmin','SDEraw','SDE','snr','oddevendiff_sig',
+                                     'Noccurrences','Nsectors','vetted?','vetting_conditions','DONEcheck_version'])
     df = df.sort_values('SDE', ascending=False)
     df.to_csv('%s/MAST/TESS/TIC%i/planetparams_%i.csv'%(cs.repo_dir, ts.tic, ts.tic), index=False)

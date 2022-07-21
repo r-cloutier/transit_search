@@ -74,7 +74,7 @@ def _run_injection_recovery_iter1(injrec, N1=500):
     # for every planet, run the TLS and flag planet as recovered or not
     # {tic,Ms,Rs,Teff,Tmag,fluxerr, P,F,T0,Rp,b,snr,sde, recovered}
     injrec_results = np.zeros((N1, 14))
-    FP_results = np.zeros((0,9))
+    FP_results = np.zeros((0,11))
     T0, Fs, snr, sde = np.zeros(N1), np.zeros(N1), np.zeros(N1), np.zeros(N1)
     for i in range(N1):
 
@@ -116,7 +116,7 @@ def _run_injection_recovery_iter1(injrec, N1=500):
         NFP = FPdict['Ps'].size
         for n in range(NFP):
             theta = np.array([FPdict[k][n] for k in np.sort(list(FPdict.keys()))])
-            FP_results = np.append(FP_results, theta.reshape(1,9), axis=0)
+            FP_results = np.append(FP_results, theta.reshape(1,11), axis=0)
         
     # compute sensitivity vs snr to used for weighted sampling in iter2
     injrec.snr_grid = np.arange(0,30)
@@ -127,7 +127,10 @@ def _run_injection_recovery_iter1(injrec, N1=500):
         injrec.sens_grid[i] = injrec_results[g,-1].sum()/g.sum() if g.sum() > 0 else np.nan
     
     g = np.isfinite(injrec.sens_grid)
-    injrec.popt_snr,_ = curve_fit(_gammaCDF, injrec.snr_grid_v2[g], injrec.sens_grid[g], p0=[15,.5])
+    try:  # exception only used during testing with N1=1
+        injrec.popt_snr,_ = curve_fit(_gammaCDF, injrec.snr_grid_v2[g], injrec.sens_grid[g], p0=[15,.5])
+    except TypeError:
+        injrec.popt_snr = 15, .5
 
     # save results
     injrec.injrec_results = injrec_results
@@ -144,7 +147,7 @@ def _run_injection_recovery_iter2(injrec, N2=500):
     # for every planet, run the TLS and flag planet as recovered or not
     # {tic,Ms,Rs,Teff,Tmag,fluxerr, P,F,T0,Rp,b,snr,sde, recovered}
     injrec_resultsv2 = np.zeros((N2,14))
-    FP_resultsv2 = np.zeros((0,9))
+    FP_resultsv2 = np.zeros((0,11))
     P, Rp, b = np.zeros(N2), np.zeros(N2), np.zeros(N2)
     T0, Fs, snr, sde = np.zeros(N2), np.zeros(N2), np.zeros(N2), np.zeros(N2)
     for i in range(N2):
@@ -188,7 +191,7 @@ def _run_injection_recovery_iter2(injrec, N2=500):
         NFP = FPdict['Ps'].size
         for n in range(NFP):
             theta = np.array([FPdict[k][n] for k in np.sort(list(FPdict.keys()))])
-            FP_resultsv2 = np.append(FP_resultsv2, theta.reshape(1,9), axis=0)
+            FP_resultsv2 = np.append(FP_resultsv2, theta.reshape(1,11), axis=0)
         
     # combine results from iter1 and iter2
     injrec_results = np.vstack([injrec.injrec_results, injrec_resultsv2])
@@ -211,6 +214,7 @@ def _run_injection_recovery_iter2(injrec, N2=500):
             pass
             
     injrec.DONE = True
+    injrec.DONEcheck_version = cs.DONEcheck_version
 
 
 
@@ -365,13 +369,22 @@ def run_tls_Nplanets_and_vet(injrec, ts, Nmax=3, rtol=0.02):
     g = np.isclose(results['periods'], Pinj, rtol=rtol)
     sde = np.nanmax(results['power'][g]) if g.sum() > 0 else np.nan
 
-    # identify FP signals
-    FPmask = ts.injrec.vetting.FP_mask * ts.injrec.vetting.vetting_mask
-    FPdict = {'Ps': ts.injrec.vetting.POIs[FPmask],
+    # identify FP signals from injrec
+    pdb.set_trace()
+    FPmask = ts.injrec.vetting.FP_mask & ts.injrec.vetting.vetting_mask
+    # vetted signals from the transit search are not FPs
+    for i,p in enumerate(ts.injrec.vetting.POIs):
+        if FPmask[i]:
+            FPmask[i] = np.invert(np.any(np.isclose(ts.vetting.POIs[ts.vetting.vetting_mask], p, rtol=rtol)))
+
+    # save FPs
+    FPdict = {'TICs': np.zeros_like(ts.injrec.vetting.POIs[FPmask])+ts.tic,
+              'Ps': ts.injrec.vetting.POIs[FPmask],
               'T0s': ts.injrec.vetting.T0OIs[FPmask],
               'Ds': ts.injrec.vetting.DOIs[FPmask],
               'Zs': ts.injrec.vetting.ZOIs[FPmask],
               'rpRss': ts.injrec.vetting.rpRsOIs[FPmask],
+              'Rps': misc.m2Rearth(misc.Rsun2m(ts.injrec.vetting.rpRsOIs[FPmask]*ts.star.Rs)),
               'SDEraws': ts.injrec.vetting.SDErawOIs[FPmask],
               'SDEs': ts.injrec.vetting.SDEOIs[FPmask],
               'snrs': ts.injrec.vetting.snrOIs[FPmask],
