@@ -127,3 +127,17 @@ def bin_lc(x_fold, y, bin_width_min=60):
     xbin = 0.5 * (bins[1:] + bins[:-1])
     ybin = num / denom
     return xbin, ybin
+
+
+def sigma_clip(arr, sig=5, offset=True):
+    offset = np.nanmedian(arr) if offset else 0
+    rms = np.sqrt(np.nanmedian((arr - offset)**2))
+    mask = np.abs(arr - offset) < sig*rms
+    return mask
+
+
+def sigma_clip_upper_only(arr, sig=5, offset=True):
+    offset = np.nanmedian(arr) if offset else 0
+    rms = np.sqrt(np.nanmedian((arr - offset)**2))
+    mask = (arr - offset) < sig*rms
+    return mask
