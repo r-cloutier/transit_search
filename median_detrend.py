@@ -8,7 +8,7 @@ def detrend_LC_1sector(bjd, fnorm, window_length_hrs=12):
     N = int(N+1) if N % 2  == 0 else int(N)
     #detrend_model = medfilt(fnorm, N)
     detrend_model = savgol_filter(fnorm, N, 1)
-    return fnorm/detrend_model, detrend_model
+    return fnorm-detrend_model+1, detrend_model
 
 
 def detrend_all_sectors(bjd, fnorm, sectors, window_length_hrs=12, sig=5):

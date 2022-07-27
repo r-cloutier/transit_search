@@ -35,4 +35,4 @@ ampgrid = .1, 100  # ppt
 Protgrid = .1, 100  # days
 
 # a unique numerical identifier set in planet_search to check if the most up-to-date version has been run
-DONEcheck_version = 2   # 2022-07-06 (do model comparison when flagging Prot_tls)
+DONEcheck_version = 3   # 2022-07-26 (vet edges and fixed GP calculation)

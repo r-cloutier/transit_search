@@ -22,6 +22,7 @@ gls.py
 *tmp*
 *test*
 PCspreadsheet*.txt
+PC*vetting*
 Protspreadsheet.csv
 sensitivity_analysis.ipynb
 compute_sensitivity.py

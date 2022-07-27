@@ -13,6 +13,7 @@ class transit_search:
 
     def __init__(self, tic, fname):
         self.tic, self.DONE = int(tic), False
+        self.DONEcheck_version = cs.DONEcheck_version
         dir_full = '%s/MAST/TESS/TIC%i'%(cs.repo_dir, tic)
         assert os.path.exists(dir_full)
         self.fname_full = '%s/%s'%(dir_full, fname)
