@@ -36,7 +36,6 @@ def run_full_planet_search(tic, use_20sec=False, overwrite=False):
         run_tls_Nplanets(ts)
         ts.pickleobject()
         vet_planets(ts)
-        ts.DONEcheck_version = cs.DONEcheck_version
         ts.DONE = True
         ts.pickleobject()
     except Exception:
@@ -53,6 +52,7 @@ def is_already_done(tic):
         return ts.DONE and ts.DONEcheck_version == cs.DONEcheck_version
     else:
         return False
+
 
 
 def read_in_lightcurve(tic, minsector=1, maxsector=56, use_20sec=False, pltt=True):
@@ -104,13 +104,28 @@ def detrend_lightcurve_median(ts, window_length_hrs=12, pltt=True):
     print('\nMedian detrending light curve for TIC %i\n'%ts.tic)
 
     # detrend each sector individually and construct outlier mask
+    # repeat if rotation persists
     kwargs = {'window_length_hrs': window_length_hrs}
-    ts.lc.fdetrend_full, ts.lc.detrend_model_full, ts.lc.mask = mdt.detrend_all_sectors(ts.lc.bjd_raw, ts.lc.fnorm_raw, ts.lc.sectors_raw, **kwargs)
+    fdetrend_raw,_,_ = mdt.detrend_all_sectors(ts.lc.bjd_raw, ts.lc.fnorm_raw, ts.lc.sectors_raw, **kwargs)
+
+    #fdetrend_raw,ts.lc.map_soln,extras = gpx.detrend_light_curve(ts.lc.bjd_raw, ts.lc.fnorm_raw, 
+    #                                                             ts.lc.efnorm_raw, ts.lc.sectors_raw, 
+    #                                                             ts.lc.sect_ranges, ts.star.Prot_gls)
+
+    repeat_gp, Prot = gpx.is_there_residual_rotation(ts, ts.lc.bjd_raw, fdetrend_raw, ts.lc.efnorm_raw,
+                                                     ts.lc.sectors_raw)
+    while repeat_gp:
+        fdetrend_raw,_,_ = mdt.detrend_all_sectorse(ts.lc.bjd_raw, fdetrend_raw, ts.lc.sectors_raw, **kwargs)
+        repeat_gp, Prot = gpx.is_there_residual_rotation(ts, ts.lc.bjd_raw, fdetrend_raw, ts.lc.efnorm_raw,
+                                                         ts.lc.sectors_raw)
 
     # mask outliers
-    p = np.vstack([ts.lc.bjd_raw,ts.lc.fnorm_raw,ts.lc.fdetrend_full,ts.lc.efnorm_raw,ts.lc.sectors_raw,ts.lc.qual_flags_raw,ts.lc.detrend_model_full]).T[ts.lc.mask].T
-    ts.lc.bjd, ts.lc.fnorm, ts.lc.fdetrend, ts.lc.efnorm, ts.lc.sectors, ts.lc.qual_flags, ts.lc.detrend_model = p
+    ts.lc.fdetrend_raw = fdetrend_raw
+    mask = misc.sigma_clip(ts.lc.fdetrend_raw, sig=7)
+    p = np.vstack([ts.lc.bjd_raw,ts.lc.fnorm_raw,ts.lc.fdetrend_raw,ts.lc.efnorm_raw,ts.lc.sectors_raw,ts.lc.qual_flags_raw]).T[mask].T
+    ts.lc.bjd, ts.lc.fnorm, ts.lc.fdetrend, ts.lc.efnorm, ts.lc.sectors, ts.lc.qual_flags = p
     ts.lc.efnorm_rescaled = np.zeros_like(ts.lc.efnorm) + np.std(ts.lc.fdetrend)
+    ts.lc.detrend_model = ts.lc.fnorm - ts.lc.fdetrend + 1
 
     # save LC plot
     if pltt:
@@ -142,16 +157,31 @@ def detrend_lightcurve_GP(ts, pltt=True):
     # check for rotation
     get_Prot_from_GLS(ts)
 
+    # if there's no rotation signature, save time and don't run the GP
+    if np.isnan(ts.star.Prot_gls):
+        raise ValueError('No rotation signature found so skip the GP.')
+
     # detrend each sector individually and construct outlier mask
-    ts.lc.fdetrend_full,ts.lc.mask,ts.lc.map_soln,extras = gpx.detrend_light_curve(ts.lc.bjd_raw, ts.lc.fnorm_raw, 
-                                                                                   ts.lc.efnorm_raw, ts.lc.sectors_raw, 
-                                                                                   ts.star.Prot_gls)
+    # repeat if rotation persists 
+    fdetrend_raw,ts.lc.map_soln,extras = gpx.detrend_light_curve(ts.lc.bjd_raw, ts.lc.fnorm_raw, 
+                                                                 ts.lc.efnorm_raw, ts.lc.sectors_raw, 
+                                                                 ts.lc.sect_ranges, ts.star.Prot_gls)
+    repeat_gp, Prot = gpx.is_there_residual_rotation(ts, ts.lc.bjd_raw, fdetrend_raw, ts.lc.efnorm_raw,
+                                                     ts.lc.sectors_raw)
+    while repeat_gp:
+        fdetrend_raw,ts.lc.map_soln,extras = gpx.detrend_light_curve(ts.lc.bjd_raw, fdetrend_raw, 
+                                                                     ts.lc.efnorm_raw, ts.lc.sectors_raw,
+                                                                     ts.lc.sect_ranges, Prot)
+        repeat_gp, Prot = gpx.is_there_residual_rotation(ts, ts.lc.bjd_raw, fdetrend_raw, ts.lc.efnorm_raw,
+                                                         ts.lc.sectors_raw)
 
     # mask outliers
-    p = np.vstack([ts.lc.bjd_raw,ts.lc.fnorm_raw,ts.lc.fdetrend_full,ts.lc.efnorm_raw,ts.lc.sectors_raw,ts.lc.qual_flags_raw]).T[ts.lc.mask].T
+    ts.lc.fdetrend_raw = fdetrend_raw
+    mask = misc.sigma_clip(ts.lc.fdetrend_raw, sig=7)
+    p = np.vstack([ts.lc.bjd_raw,ts.lc.fnorm_raw,ts.lc.fdetrend_raw,ts.lc.efnorm_raw,ts.lc.sectors_raw,ts.lc.qual_flags_raw]).T[mask].T
     ts.lc.bjd, ts.lc.fnorm, ts.lc.fdetrend, ts.lc.efnorm, ts.lc.sectors, ts.lc.qual_flags = p
     ts.lc.efnorm_rescaled = np.zeros_like(ts.lc.efnorm) + np.std(ts.lc.fdetrend)
-    ts.lc.detrend_model = ts.lc.fnorm / ts.lc.fdetrend
+    ts.lc.detrend_model = ts.lc.fnorm - ts.lc.fdetrend + 1
 
     # save LC plot
     if pltt:
@@ -197,7 +227,7 @@ def get_Prot_from_GLS(ts, pltt=True):
     ts.gls.theta = gls.best['amp'], gls.best['T0'], gls.best['P'], gls.best['offset']
     model = misc.sinemodel(ts.lc.bjd_raw[gs], *ts.gls.theta)
     _,_,dBIC = misc.DeltaBIC(ts.lc.fnorm_raw[gs], ts.lc.efnorm_raw[gs], model, np.ones_like(model), k=4)
-    ts.star.Prot_gls = gls.best['P'] if (ts.gls.power.max() >= cs.minGlspwr) and (dBIC <= -10) else np.nan
+    ts.star.Prot_gls = gls.best['P'] if np.any(np.invert(misc.sigma_clip(ts.gls.power, offset=False))) and (dBIC <= -10) else np.nan
  
     # save gls plot
     if pltt:
@@ -218,7 +248,7 @@ def run_tls_Nplanets(ts, pltt=True):
     (detrended) light curve.
     '''
     # get approximate stellar parameters
-    p = np.ascontiguousarray(tls.catalog_info(TIC_ID=ts.tic))
+    p = np.ascontiguousarray(tls.catalog_info(TIC_ID=ts.tic), dtype=tuple)
     ts.star.ab = p[0]
     ts.star.Ms, ts.star.Ms_min, ts.star.Ms_max, ts.star.Rs, ts.star.Rs_min, ts.star.Rs_max, ts.star.Teff = p[1:].astype(float)
     ts.star.reliable_Ms, ts.star.reliable_Rs, ts.star.reliable_Teff = np.repeat(True,3)
@@ -323,6 +353,7 @@ def vet_planets(ts):
     pv.vet_Prot(ts)
     pv.vet_tls_Prot(ts)
     pv.model_comparison(ts)
+    pv.vet_edges(ts)
     #pv.plot_light_curves(ts)
     pv.identify_conditions(ts)
     pv.save_planet_parameters(ts)

@@ -41,8 +41,16 @@ def get_POIs(ts, injrec=False):
         if np.isnan(p):
             continue
         duplicates = np.isclose(POIsv1[:,0], p, rtol=cs.P_duplicate_fraction)
-        avgP = np.average(POIsv1[duplicates,0], weights=POIsv1[duplicates,8])
-        avgT0 = POIsv1[duplicates,1][0]   # cannot average T0s from multiple sectors
+        Nocc = np.sum(duplicates)
+
+        # combine period from multiple sectors if available
+        if Nocc > 1:
+            N = np.round(abs(np.diff(POIsv1[duplicates,1])) / POIsv1[duplicates,0][:-1])
+            avgP = np.average(abs(np.diff(POIsv1[duplicates,1])) / N, weights=POIsv1[duplicates,8][:-1])
+        else:
+            avgP = np.average(POIsv1[duplicates,0], weights=POIsv1[duplicates,8])
+
+        avgT0 = POIsv1[duplicates,1][np.argmax(POIsv1[duplicates,8])]   # cannot average T0s from multiple sectors
         avgD = np.average(POIsv1[duplicates,2], weights=POIsv1[duplicates,8])
         avgZ = np.average(POIsv1[duplicates,3], weights=POIsv1[duplicates,8])
         avgrpRs = np.average(POIsv1[duplicates,4], weights=POIsv1[duplicates,8])
@@ -53,7 +61,6 @@ def get_POIs(ts, injrec=False):
         avgSDE = np.average(POIsv1[duplicates,8], weights=POIsv1[duplicates,8])
         avgsnr = np.average(POIsv1[duplicates,9], weights=POIsv1[duplicates,8])
         avgOED = np.average(POIsv1[duplicates,10], weights=POIsv1[duplicates,8])
-        Nocc = np.sum(duplicates)
         POIsv2 = np.vstack([POIsv2, [avgP,avgT0,avgD,avgZ,avgrpRs,avgRp,avgchi2min,avgchi2redmin,avgSDEraw,avgSDE,avgsnr,avgOED,Nocc]])
 
     # remove duplicates
@@ -243,6 +250,21 @@ def model_comparison(ts, injrec=False):
         if not dBIC_vetted: vetobj.conditions[i] += 64  # condition64
 
  
+
+def vet_edges(ts, injrec=False):
+    vetobj = ts.injrec.vetting if injrec else ts.vetting
+    vetobj.intransit_mask = np.zeros((ts.lc.bjd.size, ts.vetting.POIs.size)).astype(bool)  # save intransit mask for each PC
+    g = np.zeros_like(vetobj.vetting_mask).astype(bool)
+    for i,p in enumerate(vetobj.POIs):
+        vetobj.intransit_mask[:,i] = abs(misc.foldAt(ts.lc.bjd, p, vetobj.T0OIs[i])) <= vetobj.DOIs[i]/2/24/p
+        intransit = np.where(vetobj.intransit_mask[:,i])[0]
+        edges = np.sort(np.hstack([0, np.where(np.diff(ts.lc.bjd) > .1)[0], np.where(np.diff(ts.lc.bjd) > .1)[0]+1, ts.lc.bjd.size-1]))
+        g[i] = np.all(np.invert(np.in1d(edges, intransit)))  # all edges indices are not in-transit
+    vetobj.vetting_mask *= g
+    vetobj.conditions[np.invert(g)] += 128  # condition128
+
+
+
 def plot_light_curves(ts):
     '''
     For each vetted PC, plot the light curve to highlight the transits.

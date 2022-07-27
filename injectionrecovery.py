@@ -370,7 +370,6 @@ def run_tls_Nplanets_and_vet(injrec, ts, Nmax=3, rtol=0.02):
     sde = np.nanmax(results['power'][g]) if g.sum() > 0 else np.nan
 
     # identify FP signals from injrec
-    pdb.set_trace()
     FPmask = ts.injrec.vetting.FP_mask & ts.injrec.vetting.vetting_mask
     # vetted signals from the transit search are not FPs
     for i,p in enumerate(ts.injrec.vetting.POIs):
@@ -417,6 +416,7 @@ def vet_planets(ts):
     pv.vet_Prot(ts, injrec=True)
     pv.vet_tls_Prot(ts, injrec=True)
     pv.model_comparison(ts, injrec=True)
+    pv.vet_edges(ts, injrec=True)
     pv.identify_conditions(ts, injrec=True)
 
 
