@@ -1,4 +1,4 @@
-import os, requests, glob, pdb
+import os, requests, glob, pdb, misc
 import numpy as np
 from bs4 import BeautifulSoup
 from astropy.io import fits
@@ -85,11 +85,12 @@ def read_TESS_data(tic, minsector=1, maxsector=55, quality_cut=True,
     qual_flags = np.ascontiguousarray(qual_flags)
     texps = np.ascontiguousarray(texps)
 
-    # restrict quality flags
+    # sigma-clip and restrict quality flags
+    gsc = misc.sigma_clip_upper_only(fnorm, sig=7)
     if quality_cut:
-        g = (qual_flags == 0) & (np.isfinite(fnorm)) & (np.isfinite(efnorm)) & (np.isfinite(bjd))
+        g = gsc & (qual_flags == 0) & (np.isfinite(fnorm)) & (np.isfinite(efnorm)) & (np.isfinite(bjd))
     else:
-        g = (np.isfinite(fnorm)) & (np.isfinite(efnorm)) & (np.isfinite(bjd))
+        g = gsc & (np.isfinite(fnorm)) & (np.isfinite(efnorm)) & (np.isfinite(bjd))
     bjd, fnorm, efnorm, sectors, qual_flags, texps = bjd[g], fnorm[g], efnorm[g], sectors[g], qual_flags[g], texps[g]
 
      # get Tmag
